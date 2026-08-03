@@ -11,7 +11,7 @@
 | 阶段 | 名称 | 状态 | 关键产出 |
 |------|------|------|---------|
 | 0 | 设计文档 & 数值拍板 & 方案确认 | ✅ 完成 | game_spec v1.1 + 4 阶段流程 + 7 优化点 + 目录结构约定 |
-| 1 | 无 UI 核心引擎 | ⏳ 待开始 | `src/engine/` + 模拟器 + 单测 |
+| 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3⏳） | 基础设施+5核心函数已交付（commit c82ecbd）；待做 shop/reducer + 模拟器 + 单测 |
 | 2 | 命令行可交互版 | ⏳ 待开始 | `src/cli.ts`，终端手动玩一局 |
 | 3 | Web UI | ⏳ 待开始 | 响应式网页 6 个 Screen |
 | 4 | 平衡调优 + 文案 | ⏳ 待开始 | 10 万局通关率 30%~50%，P1 TODO 全清 |
@@ -47,47 +47,52 @@
 
 ---
 
+### 阶段 1-1：基础设施（2026-08-03 · commit c82ecbd）
+
+- [x] 工程脚手架：`package.json`（5 scripts + 6 devDeps）、`tsconfig.json`（strict ES2020）、`jest.config.js`（30s 超时）、`.gitignore`
+- [x] 常量分层：`constants.ts` 23 个硬锚点 UPPER_SNAKE + `config/balance.ts` 全部平衡参数 `let` 化 + `resetBalanceToDefaults()` 便于扫描
+- [x] RNG 可复现：`random.ts` mulberry32 算法 + `createRngFromString`（FNV-1a）+ `rngInt` / `rngPickIndex` 工具
+- [x] 类型系统：`types.ts` 全套接口 — GameState（含 `usedEventFlavors`）/ Action 判别联合 / GameResult（play|win|lose + 4 种 LoseReason 分型）/ DayRecord / EngineDeps / CommuteResult 等
+- [x] 唯一出口：`index.ts` barrel export（CLI/UI 禁止直接 import 内部路径），已导出 constants / Balance 命名空间 / types / RNG / 5 核心函数
+- [x] `tsc --noEmit` strict 模式 0 错误；Node 26 / npm 11 环境确认无需升级（已满足 engines >=20）
+
+---
+
+### 阶段 1-2：五大核心函数（2026-08-03 · commit c82ecbd）
+
+- [x] `calculateSOL()`：base -6/-4/-3 永久道具 + -15 DORA 消耗品，下限 SOL_MIN 10，纯函数无 rng
+- [x] `rollSnoozeCount()`：溢出概率法单 roll（expected 整数部分必触发 + 小数概率 +1），台灯 ×0.65，SNOOZE_MAX 3 硬上限；**4500 万次三场景严格验证零跳号**（debt=80 仅 0/1，debt=150 仅 1/2，debt=250 仅 2/3）
+- [x] `calculateCommute()`：三档 switch（subway immune 40m/5¥；express 25m/30¥ 30% 取消 +10m**最多 1 次**；premium 25m/60¥ 不取消但受天气事件）；bonusMin 仅非免疫加：下雪 +15 / eventBonus +0/+15/+20
+- [x] `rollWeather(dayIndex, hasEvent, rng)`：Day1 强制 clear，Day12 70% snow，Day4/5 有事件时独立 30% snow roll 叠加，普通工作日 20% snow
+- [x] `rollEvent(dayIndex, usedFlavors, rng)` → `{eventId, bonusMin, newlyUsedFlavor?}`：Day12 固定 holidayRush +20，Day4/5 各 50% 从 3 flavor 池**不重复抽取**+15，其余 null +0
+- [x] 冒烟分布验证（10k 样本）：Day12 雪 70.5% / 普通 19.9% / 快车取消 30.2% / Day4-5 触发 50.1%，全部落在 ±1% 区间
+
+---
+
 ## ⏳ 待做（详细写）
 
 ### 阶段 1：无 UI 核心引擎
 **目标**：`src/engine/` 纯 TS 模块，`npm run sim 10000` 能输出通关率+失败原因分布报告  
-**核心原则**：纯函数 + 可复现，零 DOM 依赖，可在 Node 里直接跑
+**核心原则**：纯函数 + 可复现，零 DOM 依赖，可在 Node 里直接跑  
+**进度**：1-1 ✅ / 1-2 ✅ / 1-3 ⏳ / 1-4 ⏳ / 1-5 ⏳（详细完成记录见上方「✅ 已完成」区）
 
 ---
 
-#### 1-1 基础设施（最先做，其他子任务依赖）
-
-**要建的文件**：
-
-| 文件 | 内容说明 |
-|------|---------|
-| `package.json` | scripts 预置：`sim` / `sim:10k` / `cli` / `test` / `test:w`；依赖：typescript、ts-node、jest、@types/jest |
-| `tsconfig.json` | 严格模式开启，target ES2020，module CommonNode |
-| `jest.config.js` | preset ts-jest，testMatch `src/tests/**/*.test.ts` |
-| `src/engine/constants.ts` | **硬锚点**（改了会出 bug 的值）：对齐 game_spec §2.1/2.2/2.3，`UPPER_SNAKE_CASE`。例：`BEDTIME_MIN=0`、`CLOCKIN_DEADLINE=600`、`ALARM_STEP=5`、`TOTAL_DAYS=13`、`SNOOZE_MAX=3` |
-| `src/engine/config/balance.ts` | **平衡参数**（调难度时只改这个文件）：`SOL_BASE=45`、下雪 20%/Boss 70%、快车取消 30%、贿赂 180 等，全部导出为变量而非 const，方便模拟器跑参数扫描 |
-| `src/engine/types.ts` | 所有类型接口（PascalCase）：对齐 game_spec §6 的 `GameState`、`Inventory`、`PendingArrivals`、`DayRecord`，再加：<br>`type CommuteId = 'subway' \| 'express' \| 'premium'`<br>`type WeatherLogic = 'clear' \| 'snow'`<br>`type EventId = null \| 'concert' \| 'expo' \| 'marathon' \| 'holidayRush'`<br>`type LoseReason = 'CANNOT_AFFORD_BRIBE' \| 'REFUSED_BRIBE' \| 'SECOND_LATE' \| 'CANNOT_AFFORD_COMMUTE'`<br>`type GameResult = {status:'playing', state:GameState} \| {status:'win', state, finalBalance} \| {status:'lose', state, reason:LoseReason}`<br>`type Action = SET_ALARM \| BUY_ITEM \| USE_DORA \| CHOOSE_COMMUTE \| CHOOSE_BRIBE \| DECLINE_BRIBE \| PASS_WEEKEND` |
-| `src/engine/random.ts` | `createRng(seed: number) => () => number`，mulberry32 算法。每局一个 seed，同一 seed 产出同一串随机。另外导出 `createSeededRngFromHash(str)` 备用 |
-| `src/engine/index.ts` | **唯一对外出口**。`export * from './types'`、`export { INITIAL_STATE } from './constants'`、`export { createRng } from './random'`、`export { reducer } from './engine'`、逐个导出 5 大核心函数 + `createSimulator`。**强制规则**：CLI/UI 层只能从 `engine` 导入，不能 `import from 'engine/xxx'` 碰内部文件 |
-
-**编码硬规则**（写代码时必须遵守）：
-1. 命名严格对齐 game_spec §1：`UPPER_SNAKE_CASE` 常量 / `camelCase` 变量函数 / `PascalCase` 类型
-2. 任何需要随机性的地方**从参数注入 rng**，禁止直接 `Math.random()`
-3. 所有函数默认写**纯函数**，不修改入参对象，返回新对象
+#### 1-1 基础设施
+**✅ 已完成，见上方「阶段 1-1：基础设施」**
 
 ---
 
 #### 1-2 五大核心函数
+**✅ 已完成，见上方「阶段 1-2：五大核心函数」**
 
-每个文件一个导出函数，纯函数（除了 rng.next），配套单测。开发顺序：sol → snooze → commute → weather → events
+---
 
-| 文件 & 函数签名 | 实现要点（对齐 game_spec §编号） |
-|----------------|-------------------------------|
-| `sol.ts`<br>`calculateSOL(inv: Inventory, doraUsed: boolean): number` | §4.2：SOL_BASE 减 pillow-6/eyeMask-4/earPlugs-3，doraUsed 再减 15，最后 `Math.max(SOL_MIN)` |
-| `snooze.ts`<br>`rollSnoozeCount(sleepDebt: number, hasLamp: boolean, rng: Rng): number` | §4.3：**重点测试防跳号**。expected = min(debt/100, 3.0) × (有灯 ? 0.65 : 1)；整数部分必触发，小数部分 rng() < extraProb 就 +1；最后硬上限 SNOOZE_MAX |
-| `commute.ts`<br>`calculateCommute(choice: CommuteId, isSnow: bool, eventBonus: number, rng: Rng): CommuteResult` | §4.5：switch 三档 baseMin/baseCost/cancelRate/immune；非免疫加下雪+15 和 eventBonus；快车只 roll 一次取消（cancelled ? +10 : 0），第二次必成功语义。返回 `{commuteMin, commuteCost, cancelled}` |
-| `weather.ts`<br>`rollWeather(dayIndex: number, rng: Rng): WeatherLogic` | §7.2：Day1 强制 clear；Day12 70% snow；Day4/5 有事件时额外 30% snow（叠加判断）；其他工作日 20% snow。返回逻辑层 `clear/snow`（展示层 flavor 让 UI 层自己随机，不进引擎） |
-| `events.ts`<br>`rollEvent(dayIndex: number, rng: Rng): EventId` | §8.2：Day12 固定 `'holidayRush'`；Day4 和 Day5 各自独立 50% 触发普通事件（从 3 个 flavor 里取**不重复**的，两天都触发时用掉两个）；其他日子返回 null。需要一个已用 flavor 池跨 Day 存到 GameState 里 → `GameState.usedEventFlavors: string[]` 字段加一下 |
+**编码硬规则（所有阶段必须遵守，防止以后踩坑）**：
+1. 命名严格对齐 game_spec §1：`UPPER_SNAKE_CASE` 常量 / `camelCase` 变量函数 / `PascalCase` 类型
+2. 任何需要随机性的地方**从参数注入 rng**，禁止直接 `Math.random()`
+3. 所有函数默认写**纯函数**，不修改入参对象，返回新对象（immutable）
+4. CLI/UI 层只能 `import ... from './engine'`（barrel），禁止 `from './engine/xxx'` 直碰内部文件
 
 ---
 
