@@ -1,0 +1,25 @@
+{
+  "name": "dont-be-late",
+  "version": "0.1.0",
+  "description": "《别迟到》时间管理文字游戏原型 — 核心引擎 + CLI + Web UI",
+  "private": true,
+  "scripts": {
+    "sim":     "ts-node src/simulator.ts",
+    "sim:10k": "ts-node src/simulator.ts 10000",
+    "cli":     "ts-node src/cli.ts",
+    "test":    "jest --config jest.config.js src/tests",
+    "test:w":  "jest --config jest.config.js --watch src/tests",
+    "build":   "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript":  "^5.5.4",
+    "ts-node":     "^10.9.2",
+    "jest":        "^29.7.0",
+    "ts-jest":     "^29.2.5",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.5.0"
+  }
+}
