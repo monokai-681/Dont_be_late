@@ -1,6 +1,6 @@
 # 《别迟到》看板 Kanban
 
-> **维护规则**：✅ 已完成 = 简略写 | ⏳ 待做 = 详细写
+> **维护规则**：✅ 已完成 = 简略（必要时用 checklist 扫一眼确认） | ⏳ 待做 = 详细写
 > **单一信息中心**：任何方案改动先改这里再改代码
 > **数值机制权威来源**：`game_spec.md`（本看板不重复数值表，只引用 §编号）
 
@@ -10,7 +10,7 @@
 
 | 阶段 | 名称 | 状态 | 关键产出 |
 |------|------|------|---------|
-| 0 | 设计文档理解 & 方案确认 | ✅ 完成 | 4 阶段流程 + 7 优化点 + 目录结构约定 |
+| 0 | 设计文档 & 数值拍板 & 方案确认 | ✅ 完成 | game_spec v1.1 + 4 阶段流程 + 7 优化点 + 目录结构约定 |
 | 1 | 无 UI 核心引擎 | ⏳ 待开始 | `src/engine/` + 模拟器 + 单测 |
 | 2 | 命令行可交互版 | ⏳ 待开始 | `src/cli.ts`，终端手动玩一局 |
 | 3 | Web UI | ⏳ 待开始 | 响应式网页 6 个 Screen |
@@ -20,16 +20,34 @@
 
 ## ✅ 已完成（简略）
 
-### 阶段 0：设计文档理解 & 方案确认（2026-08-03）
+### 阶段 0：设计文档 & 数值拍板 & 方案确认
 
-读完 README + game_spec v1.1，对齐以 game_spec 为唯一数值权威。产出结论：
-- **4 阶段开发顺序**：引擎 → CLI → UI → 调优（先验证数值正确性再做皮肤）
-- **7 个结构优化点**：可复现 RNG、常量分层、Reducer 模式、带类型失败原因、index.ts 统一出口、dailyLog 引擎内建、scripts 预置
-- **目录结构约定**：见下方「开发规范」区
+**项目基础**
+- [x] 阅读设计文档（README / game_spec），理解游戏创意
+- [x] GitHub 仓库 SSH 连接配置完成
+- [x] 输出 `game_spec.md` v1.1（完整数值 spec + TS 函数签名）
+- [x] 4 阶段开发顺序确定：引擎 → CLI → UI → 调优（先验证数值再做皮肤）
+- [x] 7 个结构优化点确定：可复现 RNG / 常量分层 / Reducer / 带类型失败 / index 出口 / dailyLog 内建 / scripts 预置
+- [x] 目录结构约定确定（见下方「开发规范」区）
+
+**机制 & 数值拍板（全部对齐 game_spec）**
+- [x] 时间模型：整数分钟（0=00:00, 600=10:00），前端展示转 HH:MM
+- [x] Day 编号：Day 0（开局）~ Day 12（最终日），off-by-one 已解决
+- [x] 日历：5 工作日 + 2 周末 + 5 工作日；周末 sleepDebt ×0.5 衰减（两天后剩 25%）
+- [x] sleepDebt：目标睡眠 480min，每日衰减 50%
+- [x] SOL：基础 45min，下限 10min
+- [x] Snooze：溢出概率法单 roll（链式正确，1500 万次验证无跳号），每次 9min 上限 3 次；台灯 ×0.65
+- [x] 通勤 3 档（移除「开车」）：🚇 地铁免疫 / 🚕 快车 30% 取消 / 🚘 专车 0% 取消但不免疫天气事件
+- [x] 天气：逻辑 2 层（clear / snow+15min），展示 6 flavor
+- [x] 城市事件：Day 4/5 独立 50% roll（3 flavor 不重复，+15）；Day 12 固定节前高峰 +20
+- [x] 经济方案 A：初始 50 + 日薪 20×12 = 总 290；贿赂 180 限 1 次
+- [x] 商店 5 种：枕头 40 / 眼罩 18 / 耳塞 12 / DORA 20颗 / 台灯 95（DORA 当晚生效，其余次日）
+- [x] 命名规范：常量 UPPER_SNAKE / 变量 camelCase / 类型 PascalCase / 函数 camelCase
+- [x] 原型移除项确认：开车、限行、车牌、油电区分、唑吡坦（传统安眠药）、地铁故障、纯随机堵车概率
 
 ---
 
-## ⏳ 待做（详细）
+## ⏳ 待做（详细写）
 
 ### 阶段 1：无 UI 核心引擎
 **目标**：`src/engine/` 纯 TS 模块，`npm run sim 10000` 能输出通关率+失败原因分布报告  
@@ -69,7 +87,7 @@
 | `snooze.ts`<br>`rollSnoozeCount(sleepDebt: number, hasLamp: boolean, rng: Rng): number` | §4.3：**重点测试防跳号**。expected = min(debt/100, 3.0) × (有灯 ? 0.65 : 1)；整数部分必触发，小数部分 rng() < extraProb 就 +1；最后硬上限 SNOOZE_MAX |
 | `commute.ts`<br>`calculateCommute(choice: CommuteId, isSnow: bool, eventBonus: number, rng: Rng): CommuteResult` | §4.5：switch 三档 baseMin/baseCost/cancelRate/immune；非免疫加下雪+15 和 eventBonus；快车只 roll 一次取消（cancelled ? +10 : 0），第二次必成功语义。返回 `{commuteMin, commuteCost, cancelled}` |
 | `weather.ts`<br>`rollWeather(dayIndex: number, rng: Rng): WeatherLogic` | §7.2：Day1 强制 clear；Day12 70% snow；Day4/5 有事件时额外 30% snow（叠加判断）；其他工作日 20% snow。返回逻辑层 `clear/snow`（展示层 flavor 让 UI 层自己随机，不进引擎） |
-| `events.ts`<br>`rollEvent(dayIndex: number, rng: Rng): EventId` | §8.2：Day12 固定 `'holidayRush'`；Day4 和 Day5 各自独立 50% 触发普通事件（从 3 个 flavor 里取**不重复**的，两天都触发时用掉两个）；其他日子返回 null。需要一个已用 flavor 池跨 Day 存到 GameState 里吗？—— 对，`GameState.usedEventFlavors: string[]` 字段加一下 |
+| `events.ts`<br>`rollEvent(dayIndex: number, rng: Rng): EventId` | §8.2：Day12 固定 `'holidayRush'`；Day4 和 Day5 各自独立 50% 触发普通事件（从 3 个 flavor 里取**不重复**的，两天都触发时用掉两个）；其他日子返回 null。需要一个已用 flavor 池跨 Day 存到 GameState 里 → `GameState.usedEventFlavors: string[]` 字段加一下 |
 
 ---
 
@@ -83,11 +101,11 @@
   - 导出 `INITIAL_STATE: GameState`（对齐 game_spec §10.1，balance=50, debt=0, bribeUsed=false, 全空 inventory）
   - 导出核心：`reducer(state: GameState, action: Action, deps: {rng: Rng}): GameResult`
   - Action 处理：
-    - `SET_ALARM(min)` → 写 `state.alarmMin`，校验 420~600 且能被 5 整除，非法值直接 clamp 或者抛错误返回（统一返回 GameResult，所以非法就 status=lose? 还是抛 Error？——建议：非法输入抛 Error，因为调用方应该做 UI 校验）
-    - `BUY_ITEM(id, qty)` → 调 `onBuyItem`；余额不够返回 `status='lose' reason='CANNOT_AFFORD_COMMUTE'`？不，商店买东西不够就不让买，不判输；通勤才判。所以 BUY_ITEM 余额不够就**抛 Error** 让 UI 拦截
+    - `SET_ALARM(min)` → 写 `state.alarmMin`，校验 420~600 且能被 5 整除，非法输入**抛 Error**（调用方 UI 层应做校验，reducer 直接报让调用方尽早发现 bug）
+    - `BUY_ITEM(id, qty)` → 调 `onBuyItem`；余额不够**抛 Error**（商店不判输，UI 拦截不让买）
     - `USE_DORA_TONIGHT` → 如果 `inventory.dora > 0`，dora -= 1，设置临时标记 `doraUsedTonight=true`（存在 `state` 里）
     - `CHOOSE_COMMUTE(id)` → 调 `calculateCommute`，扣 balance（不够就 `CANNOT_AFFORD_COMMUTE` lose），算 arriveMin，判 isLate（>600）。不迟到：走 day-advance 流程。迟到：挂 `pendingBribe=true` 等下一步动作
-    - `CHOOSE_BRIBE` → 检查 bribeUsed=false 且 balance ≥ 180：扣 180，bribeUsed=true，清 isLate，走 day-advance
+    - `CHOOSE_BRIBE` → 检查 bribeUsed=false 且 balance ≥ 180：扣 180，bribeUsed=true，清 isLate，走 day-advance；余额不够 → `CANNOT_AFFORD_BRIBE` lose
     - `DECLINE_BRIBE` → `lose reason=REFUSED_BRIBE`
     - `PASS_WEEKEND` → sleepDebt × 0.5，newDebt=0，dayIndex+1，记 dailyLog
   - day-advance 流程（工作日 CHOOSE_COMMUTE 成功后或贿赂完成后）：
@@ -96,7 +114,7 @@
     3. dayIndex += 1
     4. 如果 dayIndex > 12 且最后一天打卡成功 → `status='win' finalBalance=balance`
     5. 否则返回 `status='playing'`
-  - **注意**：`pendingBribe` 挂起时 reducer 只接受 CHOOSE_BRIBE / DECLINE_BRIBE，其他 Action 抛 Error（有限状态机）
+  - **有限状态机规则**：`pendingBribe` 挂起时 reducer 只接受 CHOOSE_BRIBE / DECLINE_BRIBE，其他 Action 抛 Error
 
 ---
 
@@ -147,6 +165,25 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
 ---
 
 ### 阶段 2~4：⏳ 阶段 1 完成后拆细
+
+---
+
+### P1 / P2 文案 & 边界 TODO（阶段 4 主做，阶段 1-3 可以先留 TODO 占位）
+
+#### P1（原型早期必补，不补会出体验坑）
+- [ ] P1-1 结算画面文案：通关 / 失败 / 不同余额区间的讽刺文案 10~15 条
+- [ ] P1-2 平衡性调整：跑模拟器 10 万局后微调 SOL / 通勤费 / 取消率 / 下雪概率，目标通关率 30%~50%
+- [ ] P1-3 前端 flavor 映射：天气 flavor 随机池的具体文案 / 图标命名（§7.1 已列 6 种：晴/多云/阴/雾霾/小雪/中雪）
+- [ ] P1-4 余额为负边界：买不起任何通勤（balance < 5 元地铁）的处理逻辑 → 建议：直接判 lose CANNOT_AFFORD_COMMUTE
+
+#### P2（可后补，不阻塞原型上线）
+- [ ] P2-1 闹钟 > 10:00 嘲讽彩蛋文案（"不如直接去公司睡？"风格）
+- [ ] P2-2 Flavor text 文案池：snooze 文案 / 快车取消文案 / 下雪事件 flavor
+- [ ] P2-3 智能台灯 UI 表现：Bedtime Screen / Wake-up Screen 怎么展示（先文字提示也行）
+- [ ] P2-4 4 种失败画面区分文案：没钱贿赂 vs 拒贿 vs 二次迟到 vs 没钱坐地铁
+- [ ] P2-5 分享功能：通关后生成 "我通关《别迟到》净赚 XX 元，第 X 天差点 GG" 风格分享文本/图片
+- [ ] P2-6 预留：后续版本加回开车 / 限行 / 事故 / 地铁故障（原型阶段不做）
+- [ ] P2-7 前端图标 / Screen 视觉风格统一
 
 ---
 
