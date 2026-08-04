@@ -21,7 +21,11 @@
 import type { EventId } from './types';
 import type { Rng } from './random';
 import { FINAL_DAY_INDEX } from './constants';
-import { EVENT_NORMAL_TRIGGER_RATE } from './config/balance';
+import {
+  EVENT_NORMAL_TRIGGER_RATE,
+  EVENT_NORMAL_BONUS_MIN,
+  EVENT_HOLIDAY_BONUS_MIN,
+} from './config/balance';
 
 const NORMAL_EVENT_FLAVORS: readonly string[] = ['concert', 'expo', 'marathon'];
 
@@ -54,7 +58,7 @@ export function rollEvent(
 ): RollEventResult {
   // 规则 3：Day12 固定节前出行高峰，独占不 roll 其他
   if (dayIndex === FINAL_DAY_INDEX) {
-    return { eventId: 'holidayRush', bonusMin: 20 };
+    return { eventId: 'holidayRush', bonusMin: EVENT_HOLIDAY_BONUS_MIN };
   }
 
   // 规则 1：Day4 和 Day5 各自独立 50% 概率触发普通事件
@@ -63,7 +67,7 @@ export function rollEvent(
       const flavor = pickUnusedFlavor(usedEventFlavors, rng);
       return {
         eventId: flavor as EventId, // flavor 是 'concert' | 'expo' | 'marathon'，属于 EventId 子集
-        bonusMin: 15,
+        bonusMin: EVENT_NORMAL_BONUS_MIN,
         newlyUsedFlavor: flavor,
       };
     }

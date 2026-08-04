@@ -18,7 +18,7 @@ export const ALARM_MAX: number          = 600;   // 10:00 — 闹钟最晚设置
 export const ALARM_STEP: number         = 5;     // 闹钟调节步长（与所有时间粒度一致）
 
 // §2.2 机制常量
-export const SOL_BASE__MIN: number      = 45;    // （用作 SOL_MIN 等派生时的参照）
+export const SOL_BASE: number           = 45;    // game_spec §2.2 锚点默认值；调难度请改 config/balance.ts 的 SOL_BASE_MINUTES
 export const SOL_MIN: number            = 10;    // SOL 下限：不可能合眼秒睡
 export const ROUTINE_BASE: number       = 25;    // 早晨基础流程（洗漱穿衣拿包）不含 snooze
 export const SNOOZE_PER: number         = 9;     // 每一次 snooze 增加的早晨流程时间

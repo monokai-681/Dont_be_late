@@ -69,6 +69,14 @@
 
 ---
 
+### 阶段 1 回头看修复（2026-08-04）
+
+- [x] #1 SOL_BASE 命名对齐：`constants.ts` 中 `SOL_BASE__MIN`（双下划线错误命名）改回 `SOL_BASE`（与 game_spec §2.2 一致），`index.ts` barrel 新增导出
+- [x] #2 events.ts 加时参数改为读 balance：`bonusMin` 硬编码 15/20 → 改用 `EVENT_NORMAL_BONUS_MIN` / `EVENT_HOLIDAY_BONUS_MIN`，避免以后调参不一致
+- [x] tsc --strict 0 错误回归验证通过
+
+---
+
 ## ⏳ 待做（详细写）
 
 ### 阶段 1：无 UI 核心引擎
