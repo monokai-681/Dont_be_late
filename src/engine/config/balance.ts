@@ -10,7 +10,7 @@
  */
 
 // ── SOL / SNOOZE 调参 ─────────────────────────────────────────
-export let SOL_BASE_MINUTES         = 45;   // SOL 基础值（constants.SOL_BASE__MIN 引用这个）
+export let SOL_BASE_MINUTES         = 45;   // SOL 基础值（锚点常量 SOL_BASE 的默认值镜像；调难度改这里）
 export let SOL_PILLOW_REDUCTION     = -6;   // 枕头削减 SOL（负数）
 export let SOL_EYE_MASK_REDUCTION   = -4;   // 眼罩削减 SOL
 export let SOL_EAR_PLUGS_REDUCTION  = -3;   // 耳塞削减 SOL
@@ -34,9 +34,10 @@ export let EVENT_NORMAL_BONUS_MIN   = 15;   // 普通事件（演唱会等）加
 export let EVENT_HOLIDAY_BONUS_MIN  = 20;   // 节前出行高峰加时
 
 // ── 天气发生分布 ───────────────────────────────────────────────
-export let WEATHER_SNOW_RATE_NORMAL_DAY = 0.20; // 普通工作日（Day2/3/8/9/10/11）下雪概率
+export let WEATHER_SNOW_RATE_NORMAL_DAY = 0.20; // 普通工作日（Day2/3/4/5/8/9/10/11）下雪概率
 export let WEATHER_SNOW_RATE_FINAL_DAY  = 0.70; // Boss 关 Day12 下雪概率
-export let WEATHER_SNOW_RATE_EVENT_DAY  = 0.30; // Day4/5 有事件叠加时的额外下雪概率（叠在 normal 之上？——按 spec §7.2：有事件时独立再 roll 一次 30%）
+// 注：2026-08-05 机制简化：天气/城市事件改为完全独立 roll，不再有「有事件则额外下雪概率」
+//     双灾叠加时的极端加时由 MAX_COMMUTE_BONUS 硬上限（25 分钟）兜底
 
 // ── 城市事件发生分布 ───────────────────────────────────────────
 export let EVENT_NORMAL_TRIGGER_RATE = 0.50; // Day4 和 Day5 各自独立触发普通事件的概率
@@ -61,7 +62,7 @@ export function resetBalanceToDefaults(): void {
   COMMUTE_EXPRESS_MIN = 25; COMMUTE_EXPRESS_COST = 30; COMMUTE_EXPRESS_CANCEL_RATE = 0.30; COMMUTE_EXPRESS_CANCEL_EXTRA_MIN = 10;
   COMMUTE_PREMIUM_MIN = 25; COMMUTE_PREMIUM_COST = 60;
   WEATHER_SNOW_BONUS_MIN = 15; EVENT_NORMAL_BONUS_MIN = 15; EVENT_HOLIDAY_BONUS_MIN = 20;
-  WEATHER_SNOW_RATE_NORMAL_DAY = 0.20; WEATHER_SNOW_RATE_FINAL_DAY = 0.70; WEATHER_SNOW_RATE_EVENT_DAY = 0.30;
+  WEATHER_SNOW_RATE_NORMAL_DAY = 0.20; WEATHER_SNOW_RATE_FINAL_DAY = 0.70;
   EVENT_NORMAL_TRIGGER_RATE = 0.50;
   INITIAL_BALANCE = 50; DAILY_SALARY = 20; BRIBE_COST = 180;
   SHOP_PRICE_PILLOW = 40; SHOP_PRICE_EYE_MASK = 18; SHOP_PRICE_EAR_PLUGS = 12; SHOP_PRICE_DORA_PER_PILL = 20; SHOP_PRICE_SMART_LAMP = 95;

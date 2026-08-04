@@ -13,6 +13,7 @@
 
 import type { CommuteId, CommuteResult } from './types';
 import type { Rng } from './random';
+import { MAX_COMMUTE_BONUS } from './constants';
 import {
   COMMUTE_SUBWAY_MIN,   COMMUTE_SUBWAY_COST,
   COMMUTE_EXPRESS_MIN,  COMMUTE_EXPRESS_COST,  COMMUTE_EXPRESS_CANCEL_RATE,  COMMUTE_EXPRESS_CANCEL_EXTRA_MIN,
@@ -61,11 +62,12 @@ export function calculateCommute(
       break;
   }
 
-  // Step 1: 天气 + 事件加时（仅非免疫交通）
+  // Step 1: 天气 + 事件加时（仅非免疫交通）— 叠加后有硬上限（MAX_COMMUTE_BONUS=25，2026-08-05 机制简化）
   let bonusMin = 0;
   if (!immune) {
     if (isSnow) bonusMin += WEATHER_SNOW_BONUS_MIN; // 下雪 +15
     bonusMin += eventBonus;                          // 事件 +15/+20 或 0
+    bonusMin = Math.min(bonusMin, MAX_COMMUTE_BONUS); // ⚠️ 双灾叠加硬上限 25 分钟
   }
 
   // Step 2: 快车取消 roll（只 roll 一次！取消最多 0 或 1 次，第二次必成功）

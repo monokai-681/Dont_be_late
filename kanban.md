@@ -77,6 +77,16 @@
 
 ---
 
+### 阶段 1 机制简化（2026-08-05 · MAX_COMMUTE_BONUS=25min 独立 roll）
+
+- [x] 天气/城市事件改为完全独立 roll：移除 rollWeather 的 hasEventToday 参数，删除 Day4/5「有事件则额外 30% 下雪」分支，Day4/5 下雪率与普通工作日一致 20%
+- [x] 新增 MAX_COMMUTE_BONUS=25 锚点常量（§2.2 机制常量），calculateCommute 中天气+事件加时叠加后统一 Math.min cap 到 25 分钟
+- [x] 同步移除 balance.ts 的 WEATHER_SNOW_RATE_EVENT_DAY 参数及 reset 函数对应项
+- [x] game_spec 文档四处同步：§7.2 天气分布表 / §8.3 叠加规则（含 5 个典型案例 + 新旧 Boss 关对比）/ §9 Day5 难度日历行 / §10.2 Step3 钩子注释
+- [x] 设计遗留问题 #3（roll 调用顺序依赖）与 #5（Day4/5 下雪率 30% vs 44% 歧义）**均已被本次机制简化直接消解，无需再讨论**
+
+---
+
 ## ⏳ 待做（详细写）
 
 ### 阶段 1：无 UI 核心引擎

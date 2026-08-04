@@ -3,13 +3,17 @@
  * ---------------------------------------------------------------
  * 对齐 game_spec §7.2 天气发生分布
  *
+ * ⚠️ 2026-08-05 机制简化：天气 roll 与 城市事件 roll **完全独立**
+ *   — 不再有「Day4/5 有事件则额外下雪概率」的分支
+ *   — 双灾（下雪 + 事件）同时发生时的极端加时，由 commute.ts 的
+ *     MAX_COMMUTE_BONUS（25 分钟）硬上限统一兜底
+ *
  * 固定骨架（保证体验不炸）：
  *   Day 1  : 强制 clear（教学关不搞事）
  *   Day 12 : 70% 概率 snow（Boss 关高概率）
- *   Day 4/5: 有城市事件叠加时 → 独立再 roll 30% snow
  *
  * 随机扰动（增加重玩多样性）：
- *   其他未指定的工作日（Day 2/3/8/9/10/11）：20% snow / 80% clear
+ *   其他未指定的工作日（Day 2/3/4/5/8/9/10/11）：20% snow / 80% clear
  *
  * 注意：
  * - 只返回逻辑层 clear/snow，展示层 flavor（晴/多云/阴/雾霾/小雪/中雪）
@@ -24,20 +28,15 @@ import { FINAL_DAY_INDEX } from './constants';
 import {
   WEATHER_SNOW_RATE_NORMAL_DAY,
   WEATHER_SNOW_RATE_FINAL_DAY,
-  WEATHER_SNOW_RATE_EVENT_DAY,
 } from './config/balance';
 
 /**
  * 根据 Day 编号 roll 今日天气逻辑层。
- * @param dayIndex         当前 dayIndex（0~12）
- * @param hasEventToday    当天是否有城市事件（Day4/5 有事件时叠加 roll）
- * @param rng              可复现随机数发生器
+ * 与城市事件完全独立，不再需要 hasEventToday 参数。
+ * @param dayIndex  当前 dayIndex（0~12）
+ * @param rng       可复现随机数发生器
  */
-export function rollWeather(
-  dayIndex: number,
-  hasEventToday: boolean,
-  rng: Rng,
-): WeatherLogic {
+export function rollWeather(dayIndex: number, rng: Rng): WeatherLogic {
   // 固定骨架 1：Day1 教学关不下雪
   if (dayIndex === 1) return 'clear';
 
@@ -46,12 +45,7 @@ export function rollWeather(
     return rng() < WEATHER_SNOW_RATE_FINAL_DAY ? 'snow' : 'clear';
   }
 
-  // 固定骨架 3：Day4 / Day5 有事件时，独立再 roll 一次 30% 下雪
-  if ((dayIndex === 4 || dayIndex === 5) && hasEventToday) {
-    if (rng() < WEATHER_SNOW_RATE_EVENT_DAY) return 'snow';
-  }
-
-  // 随机扰动：普通工作日 20% 下雪
+  // 随机扰动：普通工作日 20% 下雪（Day 2/3/4/5/8/9/10/11）
   const isWorkDay =
     dayIndex === 1 || dayIndex === 2 || dayIndex === 3 || dayIndex === 4 || dayIndex === 5 ||
     dayIndex === 8 || dayIndex === 9 || dayIndex === 10 || dayIndex === 11 || dayIndex === 12;

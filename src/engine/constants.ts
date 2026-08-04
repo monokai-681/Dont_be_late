@@ -26,6 +26,7 @@ export const SNOOZE_MAX: number         = 3;     // snooze 次数硬上限（最
 export const SNOOZE_GRADIENT: number    = 100;   // 欠 1 分钟 sleepDebt → +1% 第一次 snooze 概率
 export const LAMP_MULTIPLIER: number    = 0.65;  // 智能台灯：snooze 期望打 65 折
 export const DEBT_DECAY: number         = 0.5;   // sleepDebt 每日衰减系数：保留 50%
+export const MAX_COMMUTE_BONUS: number  = 25;    // 快车/专车 天气+事件叠加加时的硬上限（2026-08-05 机制简化：天气/事件独立，极端双灾压到 25 分）
 
 // §2.3 尺寸 / 结构常量
 export const TOTAL_DAYS: number         = 13;    // Day 0 ~ Day 12
