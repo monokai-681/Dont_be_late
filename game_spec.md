@@ -39,7 +39,7 @@
 
 | 常量名 | 值 | 说明 |
 |-------|-----|------|
-| `SOL_BASE` | `45`（分钟）| 无任何助眠物品时的入睡等待时间（Sleep Onset Latency）|
+| `SOL_BASE` | `45`（分钟）| 无任何助眠物品时的入睡等待时间（Sleep Onset Latency）。硬锚点默认值；实际调参改 `balance.ts SOL_BASE_MINUTES`（两者保持一致）|
 | `SOL_MIN` | `10`（分钟）| SOL 下限：买了所有道具也不能低于 10 分钟（不可能合眼秒睡）|
 | `ROUTINE_BASE` | `25`（分钟）| 早晨基础流程时间：起床→出门所需固定耗时（洗漱/穿衣/拿包），不含 snooze |
 | `SNOOZE_PER` | `9`（分钟）| 每一次 snooze（赖床）增加的早晨流程时间 |
@@ -47,12 +47,13 @@
 | `SNOOZE_GRADIENT` | `100`（分钟 sleepDebt）| snooze 一阶概率爬满 100% 所需睡眠债分钟数（每欠 1 分钟 → +1% 第一次概率）|
 | `LAMP_MULTIPLIER` | `0.65` | 智能台灯效果：snooze 期望次数乘以该系数（打 65 折 = 减少 35% 赖床概率）|
 | `DEBT_DECAY` | `0.5` | sleepDebt 每日衰减系数：前一天的 sleepDebt 只保留 50% 带入第二天 |
+| `MAX_COMMUTE_BONUS` | `25`（分钟）| 快车/专车 天气+事件叠加加时的硬上限（2026-08-05 机制简化：二者独立 roll，双灾压到 25 封顶）|
 
 ### 2.3 尺寸/结构常量
 
 | 常量名 | 值 | 说明 |
 |-------|-----|------|
-| `TOTAL_DAYS` | `13`（Day 0 ~ Day 12）| Day 0 开局介绍；Day 1~12 游戏循环；结算在 Day 12 结束后触发 |
+| `TOTAL_DAYS` | `13`（Day 0 ~ Day 12）| Day 0 开局介绍；Day 1~12 游戏循环；**Day 13 = 结算画面（非循环 Day，是 GameResult 展示层编号，不计入 TOTAL_DAYS）** |
 | `WORK_DAY_COUNT` | `10` | 总共 10 个工作日需要打卡 |
 | `COMMUTE_OPTION_COUNT` | `3` | **地铁 / 快车 / 专车**（「开车」选项已从原型移除，后续版本再加）|
 | `SHOP_ITEM_COUNT` | `5` | 枕头 / 眼罩 / 耳塞 / DORA / 智能台灯（「传统安眠药」已移除）|
@@ -205,11 +206,13 @@ function calculateSOL(inventory: Inventory, doraUsedTonight: boolean): number {
 ```typescript
 /**
  * 计算今天早晨 snooze 次数
- * @param sleepDebt  当天早晨生效的累计睡眠债（已在循环起点做过 ×DEBT_DECAY + newDebt 处理）
- * @param hasSmartLamp  是否购买了智能台灯
+ * ⚠️ 算法说明伪代码：真实实现必须注入 Rng，禁止直接使用 Math.random（见 src/engine/random.ts）
+ * @param sleepDebt    当天早晨生效的累计睡眠债（已在循环起点做过 ×DEBT_DECAY + newDebt 处理）
+ * @param hasSmartLamp 是否购买了智能台灯
+ * @param rng          可复现随机数发生器注入（mulberry32）
  * @returns 0 ~ SNOOZE_MAX 之间的整数
  */
-function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean): number {
+function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean, rng: Rng): number {
   // Step 1: 期望次数 = min(sleepDebt / 100, 3.0)
   let expected = Math.min(sleepDebt / SNOOZE_GRADIENT, SNOOZE_MAX);
 
@@ -221,7 +224,7 @@ function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean): number {
   //   小数部分 = 再多触发 1 次的概率
   const base = Math.floor(expected);
   const extraProb = expected - base;
-  let count = base + (Math.random() < extraProb ? 1 : 0);
+  let count = base + (rng() < extraProb ? 1 : 0);
 
   // Step 4: 硬上限保险
   return Math.min(count, SNOOZE_MAX);
@@ -254,15 +257,18 @@ interface CommuteResult {
 
 /**
  * 通勤结算（工作日选完交通方式后调用）
+ * ⚠️ 算法说明伪代码：真实实现必须注入 Rng，禁止直接使用 Math.random（见 src/engine/random.ts）
  * @param choice      玩家选择的通勤 ID
  * @param isSnow      当天下雪（true/false）
  * @param eventBonus  当天城市事件加时（0 / 15 / 20 分钟，节前高峰 20）
+ * @param rng         可复现随机数发生器注入（快车取消 roll 用）
  * @returns 结算结果
  */
 function calculateCommute(
   choice: CommuteId,
   isSnow: boolean,
-  eventBonus: number
+  eventBonus: number,
+  rng: Rng,
 ): CommuteResult {
   // 基础参数（三档）
   let baseMin: number;
@@ -284,10 +290,11 @@ function calculateCommute(
   if (!immune) {
     if (isSnow) bonusMin += 15;        // 下雪 +15 分钟
     bonusMin += eventBonus;             // 事件 +15/+20 或 0
+    bonusMin = Math.min(bonusMin, MAX_COMMUTE_BONUS); // ⚠️ 双灾叠加硬上限 25 分钟
   }
 
   // Step 2: 快车取消 roll（只 roll 一次！取消最多 0 或 1 次，第二次必成功）
-  const cancelled = choice === 'express' && Math.random() < cancelRate;
+  const cancelled = choice === 'express' && rng() < cancelRate;
   const cancelMin = cancelled ? 10 : 0;
 
   // Step 3: 汇总
@@ -303,11 +310,12 @@ function calculateCommute(
 
 ```typescript
 // 通勤结算后调用
-arriveMin = alarmMin + morningRoutineMin + commuteResult.commuteMin;
-balance  -= commuteResult.commuteCost;
+// ⚠️ 真实实现抽成独立函数：calculateArrivalMinutes()，便于单测和复用
+arriveMin  = alarmMin + morningRoutineMin + commuteResult.commuteMin;
+balance   -= commuteResult.commuteCost;
 
-isLate   = arriveMin > CLOCKIN_DEADLINE;   // > 600 算迟到
-lateMin  = arriveMin - CLOCKIN_DEADLINE;   // 迟到分钟数（仅展示用）
+isLate    = arriveMin > CLOCKIN_DEADLINE;   // > 600 算迟到
+lateMin   = arriveMin - CLOCKIN_DEADLINE;   // 迟到分钟数（仅展示用）
 ```
 
 ### 4.7 经济系统
@@ -427,7 +435,7 @@ interface PendingArrivals {
 
 interface GameState {
   // 基础
-  dayIndex: number;             // 0 ~ 13
+  dayIndex: number;             // 0 ~ 13（Day0=开局介绍；Day1~12=游戏循环；Day13=结算日，不进循环）
   balance: number;              // 余额
   sleepDebt: number;            // 当前累计睡眠债（分钟）
   bribeUsed: boolean;           // 贿赂是否用过
@@ -436,8 +444,14 @@ interface GameState {
   inventory: Inventory;         // 见 §4.2
   pendingArrivals: PendingArrivals;  // 次日晚生效的已购物品（到货机制）
 
+  // 城市事件 flavor 不重复池（2026-08-05 机制补全）
+  usedEventFlavors: string[];   // 已用过的普通事件 flavor（'concert'|'expo'|'marathon'）
+                                // Day0 初始化为 []，**全生命周期不 reset**
+                                // 详情见 §8.2 末尾「实现机制四要素」
+
   // 工作日每天运行时产生
   alarmMin?: number;
+  doraUsedTonight?: boolean;    // 今晚是否服用 DORA（SOL 计算依赖此标记，§4.2）
   solTonight?: number;
   actualSleepMin?: number;
   newDebtTonight?: number;
@@ -445,13 +459,14 @@ interface GameState {
   routineMin?: number;          // ROUTINE_BASE + snoozeCount×SNOOZE_PER
   commuteChoice?: CommuteId;
   commuteMin?: number;
+  commuteCancelled?: boolean;   // 快车是否被取消（前端展示 flavor，CommuteResult.cancelled 写回）
   arriveMin?: number;
   isLate?: boolean;
   weatherToday?: WeatherLogic;  // 'clear' | 'snow'
   eventToday?: EventId | null;  // null | 'concert' | 'expo' | 'marathon' | 'holidayRush'
 
   // 结算回顾
-  dailyLog: DayRecord[];
+  dailyLog: DayRecord[];        // Day 结束时 push，长度 = 已结束的 Day 数（Day13=结算日也 push 1 条总结）
 }
 
 interface DayRecord {
@@ -531,6 +546,34 @@ interface DayRecord {
    - 原型阶段暂不实现（若以后加也是 1% 左右极稀有）
 ```
 
+**实现机制四要素（必须遵守，2026-08-05 补全）：
+  1. 数据结构：GameState.usedEventFlavors: string[] —— 已用普通事件 flavor 池，
+     初始空数组，**全生命周期不 reset**（避免未来 Day8~11 若加普通事件时也不会重复）。
+  2. 谁负责写入：调用 rollEvent() 的一方（reducer.onEnterBedtime）——
+     若 rollEvent 返回 newlyUsedFlavor，则 immutable 追加：
+       nextUsed = [...prevUsed, newlyUsedFlavor]
+     写回 GameState.usedEventFlavors。
+  3. 生命周期：Day 初始化一次，绝不 reset。
+  4. 函数签名（真实实现）：
+
+```typescript
+interface RollEventResult {
+  eventId: EventId;              // null | 'concert' | 'expo' | 'marathon' | 'holidayRush'
+  bonusMin: number;             // 0 | 15 | 20
+  newlyUsedFlavor?: string;   // 若触发了普通事件，返回本次用掉的 flavor（写回 usedEventFlavors）
+}
+
+/**
+ * @param dayIndex          0~13
+ * @param usedEventFlavors 已用 flavor 池（排除已用）
+ * @param rng              可复现随机数注入（禁止 Math.random）
+ */
+function rollEvent(
+  dayIndex: number, usedEventFlavors: readonly string[], rng: Rng,
+): RollEventResult;
+```
+⚠️ 算法伪代码示例只是说明，真实实现必须注入 Rng。
+
 ### 8.3 事件与天气叠加规则
 
 ```
@@ -593,6 +636,7 @@ const INITIAL_STATE: GameState = {
     smartLamp: false,
     dora: 0,
   },
+  usedEventFlavors: [],            // 普通事件 flavor 去重池，Day0 空，终身不 reset
   dailyLog: [],
 };
 ```
@@ -628,7 +672,11 @@ function applyPendingArrivals(state: GameState): void {
 }
 
 // 玩家在睡前 Screen 购买物品时调用（DORA 当晚进 inventory，其他进 pendingArrivals）
-function onBuyItem(state: GameState, itemId: string, qty: number = 1): void {
+// itemId: ShopItemId 字面量联合（'pillow'|'eyeMask'|'earPlugs'|'dora'|'smartLamp'），
+//   不是宽泛 string，避免拼写错误绕过编译检查
+// qty: 仅 dora 支持多颗（默认为 1），其他 4 种永久道具 qty 固定 1
+function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): void {
+  const n = qty ?? 1;
   switch (itemId) {
     case 'pillow':
     case 'eyeMask':
@@ -638,8 +686,8 @@ function onBuyItem(state: GameState, itemId: string, qty: number = 1): void {
       state.pendingArrivals[itemId] = true;   // 次日晚生效
       break;
     case 'dora':
-      state.balance -= PRICES.dora * qty;
-      state.inventory.dora += qty;           // 当晚立刻进库存（买了就能吃）
+      state.balance -= PRICES.dora * n;
+      state.inventory.dora += n;             // 当晚立刻进库存（买了就能吃）
       break;
   }
 }

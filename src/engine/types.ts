@@ -74,7 +74,7 @@ export type GameResult =
 
 // ── 每日回顾记录 ────────────────────────────────────────────────
 export interface DayRecord {
-  day: number;                  // 1 ~ 12
+  day: number;                  // 1 ~ 13（Day13=结算日，只有 day/isWorkDay 两个字段有值，其余可省略）
   isWorkDay: boolean;
   alarmHHMM?: string;           // 工作日才有
   sleepHHMM?: string;           // "实际睡眠 6h35m" 风格，工作日才有
@@ -89,7 +89,7 @@ export interface DayRecord {
 // ── 核心：整局游戏状态 ──────────────────────────────────────────
 export interface GameState {
   // ── 基础计数 ───────────────────────────────────────────────
-  dayIndex: number;             // 0 ~ 12（Day0=开局介绍，Day12=最终日）
+  dayIndex: number;             // 0 ~ 13（Day0=开局介绍，Day1~Day12=游戏循环10工作日+2周末，Day13=结算日）
   balance: number;              // 当前余额（元）
   sleepDebt: number;            // 当前累计睡眠债（分钟，始终 ≥ 0）
   bribeUsed: boolean;           // 贿赂是否已使用
@@ -99,7 +99,7 @@ export interface GameState {
   pendingArrivals: PendingArrivals;
 
   // ── 城市事件 flavor 不重复池 ────────────────────────────────
-  usedEventFlavors: string[];   // 已用过的普通事件 flavor，下次取时排除
+  usedEventFlavors: string[];   // 已用过的普通事件 flavor，下次取时排除（Day0 初始 [], 全生命周期不 reset）
 
   // ── 工作日运行时临时状态（每个工作日循环后被覆盖）────────────
   alarmMin?: number;            // 玩家设置的闹钟分钟数（420~600）
@@ -111,16 +111,14 @@ export interface GameState {
   routineMin?: number;          // 今早总流程时间 = ROUTINE_BASE + snoozeCount × SNOOZE_PER
   commuteChoice?: CommuteId;    // 玩家选的通勤方式
   commuteMin?: number;          // 通勤结算出的耗时
-  commuteCancelled?: boolean;   // 快车被取消了吗（flavor 用）
+  commuteCancelled?: boolean;   // 快车被取消了吗（前端 flavor 用）
   arriveMin?: number;           // 到达分钟数（>600 迟到）
   isLate?: boolean;             // 今日是否迟到（注意：贿赂成功后会被置回 false）
-  pendingBribe?: boolean;       // 挂起状态：true 时 reducer 只接受 CHOOSE_BRIBE / DECLINE_BRIBE
   weatherToday?: WeatherLogic;  // 今日天气逻辑层
   eventToday?: EventId;         // 今日城市事件
-  dailyWageCredited?: boolean;  // 今日工资是否发过（防止重复发）
 
   // ── 每日回顾日志 ───────────────────────────────────────────
-  dailyLog: DayRecord[];        // 长度 = 已结束的 Day 数（Day1 结束后 push 第 1 条）
+  dailyLog: DayRecord[];        // 长度 = 已结束的 Day 数（Day1 结束后 push 第 1 条；Day13 结算日 push 1 条总结）
 }
 
 // ── 依赖注入（reducer/deps）─────────────────────────────────────
