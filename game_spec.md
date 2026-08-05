@@ -1,21 +1,29 @@
 # 《别迟到》游戏数值规格文档 (Game Spec)
 
-> **版本**: v1.1  
-> **生成日期**: 2026-08-03  
-> **状态**: 锚点/常量/数值/事件系统 已确认；原型可开始开发
+> **版本**: v1.2
+> **生成日期**: 2026-08-03
+> **最后更新**: 2026-08-06
+> **状态**: takeover 规则已收敛；新功能开发暂缓，先完成接管整理
 
 ---
 
 ## 1. 文档说明
 
-本文档是《别迟到》原型开发的**唯一数值与机制权威来源**。所有代码实现必须以本文档为准。  
+本文档是《别迟到》原型开发的**唯一数值、机制、状态流与边界规则权威来源**。所有代码实现必须以本文档为准。
 如果在开发中发现数值问题或需要调整，应先更新本文档，再改代码。
+
+文档职责固定如下：
+
+- `game_spec.md`：机制、数值、状态流与边界规则；变更先在此定稿。
+- `kanban.md`：进度、任务、风险和待决事项，只引用本规格，不重复定义冲突规则。
+- `README.md`：项目入口和摘要。
+- `design_backup_old.md`：**已作废的历史文件，不得引用、采用或更新。**
 
 ### 命名约定（TypeScript / JavaScript）
 
 | 场景 | 命名规范 | 正确例子 | 错误例子 |
 |------|---------|---------|---------|
-| 模块级硬编码常量（永不修改的 magic number）| **UPPER_SNAKE_CASE** | `const CLOCKIN_DEADLINE = 600` | `const clockin_deadline = 600` |
+| 模块级硬编码常量（永不修改的 magic number）| **UPPER_SNAKE_CASE** | `const CLOCKIN_DEADLINE = 540` | `const clockin_deadline = 540` |
 | 运行时会变的变量 / 对象字段 | **camelCase** | `sleepDebt`, `gameState.balance` | `gameState.BALANCE` |
 | 类 / 接口 / 类型名 | **PascalCase** | `interface GameState`, `class Engine` | `interface gameState` |
 | 函数 / 方法名 | **camelCase** | `function rollSnoozeCount()` | `Roll_Snooze_Count()` |
@@ -29,7 +37,7 @@
 | 常量名 | 值 | 人类时间 | 说明 |
 |-------|-----|---------|------|
 | `BEDTIME_MIN` | `0`（分钟）| 00:00（当天凌晨）| 每个 Day 循环的固定时间起点 |
-| `CLOCKIN_DEADLINE` | `600`（分钟）| 10:00 | 上班打卡 deadline，超过算「迟到」|
+| `CLOCKIN_DEADLINE` | `540`（分钟）| 09:00 | 上班打卡 deadline，超过算「迟到」；D-8 首轮实验值 |
 | `TARGET_SLEEP_MIN` | `480`（分钟）| 8 小时 | 每晚「睡饱了」的目标睡眠时长 |
 | `ALARM_MIN` | `420`（分钟）| 07:00 | 工作日闹钟允许的最早设置时间 |
 | `ALARM_MAX` | `600`（分钟）| 10:00 | 工作日闹钟允许的最晚设置时间（后续考虑做嘲讽彩蛋）|
@@ -43,7 +51,7 @@
 | `SOL_MIN` | `10`（分钟）| SOL 下限：买了所有道具也不能低于 10 分钟（不可能合眼秒睡）|
 | `ROUTINE_BASE` | `25`（分钟）| 早晨基础流程时间：起床→出门所需固定耗时（洗漱/穿衣/拿包），不含 snooze |
 | `SNOOZE_PER` | `9`（分钟）| 每一次 snooze（赖床）增加的早晨流程时间 |
-| `SNOOZE_MAX` | `3`（次）| snooze 次数硬上限（最大额外 27 分钟）|
+| `SNOOZE_MAX` | `6`（次）| snooze 次数硬上限（最大额外 54 分钟）；D-8 首轮实验值 |
 | `SNOOZE_GRADIENT` | `100`（分钟 sleepDebt）| snooze 一阶概率爬满 100% 所需睡眠债分钟数（每欠 1 分钟 → +1% 第一次概率）|
 | `LAMP_MULTIPLIER` | `0.65` | 智能台灯效果：snooze 期望次数乘以该系数（打 65 折 = 减少 35% 赖床概率）|
 | `DEBT_DECAY` | `0.5` | sleepDebt 每日衰减系数：前一天的 sleepDebt 只保留 50% 带入第二天 |
@@ -53,7 +61,7 @@
 
 | 常量名 | 值 | 说明 |
 |-------|-----|------|
-| `TOTAL_DAYS` | `13`（Day 0 ~ Day 12）| Day 0 开局介绍；Day 1~12 游戏循环；**Day 13 = 结算画面（非循环 Day，是 GameResult 展示层编号，不计入 TOTAL_DAYS）** |
+| `TOTAL_DAYS` | `13`（Day 0 ~ Day 12）| Day 0 开局介绍；Day 1~12 游戏循环。**结算页是 `GameResult`/`result phase`，不叫 Day 13，也不计入 `TOTAL_DAYS`。** |
 | `WORK_DAY_COUNT` | `10` | 总共 10 个工作日需要打卡 |
 | `COMMUTE_OPTION_COUNT` | `3` | **地铁 / 快车 / 专车**（「开车」选项已从原型移除，后续版本再加）|
 | `SHOP_ITEM_COUNT` | `5` | 枕头 / 眼罩 / 耳塞 / DORA / 智能台灯（「传统安眠药」已移除）|
@@ -86,7 +94,7 @@
 | **Day 10** | 周三 | 工作日 #8 | ✅ | 同上 |
 | **Day 11** | 周四 | 工作日 #9 | ✅ | 同上 |
 | **Day 12** | 周五 | 工作日 #10（最终日）| ✅ | 标准工作日循环，**固定事件「节前出行高峰」**（不 roll 其他事件）。当天白天打卡成功 = 立刻通关！|
-| **Day 13** | 结算日 | — | — | 结算画面：通关或失败 + 最终余额 + 每日回顾 |
+| **Result** | 结算 | — | — | `GameResult` 展示层：通关或失败 + 最终余额 + Day 1~12 每日回顾；不是 Day，不写入 `dailyLog` |
 
 ### 3.3 工作日完整循环（Day 1~5, Day 8~12）
 
@@ -118,14 +126,15 @@
     └──────┬───────┘
            │ 到达公司
     ┌──────▼───────┐
-    │  办公室 Screen│  显示打卡分钟数 VS 600 deadline
+    │  办公室 Screen│  显示打卡分钟数 VS 540 deadline
     │  Office      │  若迟到 → 弹出贿赂（180元/只能用一次）
     │              │  玩家选择后 → 进入下一个 Day
     └──────┬───────┘
            │
-     sleepDebt 处理：
-       effectiveDebt_nextDay = currentSleepDebt × DEBT_DECAY + newDebt_lastNight
-       跳转到 Day N+1 循环起点
+     sleepDebt 已在本日睡眠结束、snooze 之前更新：
+       morningDebt = previousCarriedDebt × DEBT_DECAY + newDebtTonight
+       本日 snooze 使用 morningDebt；通勤结束后不再重复衰减
+       将 morningDebt 作为 carriedDebt 带入下一个 Day
 ```
 
 ### 3.4 周末简化循环（Day 6 / Day 7）
@@ -158,11 +167,19 @@
 ```
 变量名：sleepDebt  （number，单位分钟，始终 ≥ 0）
 
-每个 Day 结束时（无论工作日还是周末）：
-  sleepDebt = sleepDebt × DEBT_DECAY   // DEBT_DECAY = 0.5
-
-只有工作日结束时才新增 newDebt（周末不新增，newDebt = 0）：
+工作日当晚睡眠结束、计算 snooze 之前：
+  previousCarriedDebt = sleepDebt
   newDebt = max(0, TARGET_SLEEP_MIN - actualSleepMin)
+  sleepDebt = previousCarriedDebt × DEBT_DECAY + newDebt
+
+紧接着的早晨：
+  rollSnoozeCount(sleepDebt, ...)  // 当晚新增的 newDebt 立即影响本次早晨
+
+工作日通勤结束：
+  不再对 sleepDebt 做第二次衰减；直接带入下一个 Day
+
+周末不执行睡眠和 newDebt，只执行一次：
+  sleepDebt = sleepDebt × DEBT_DECAY
 
 其中实际睡眠 actualSleepMin：
   actualSleepMin = max(0, alarmMin - sol)   // alarmMin 是玩家设置的闹钟时间
@@ -235,7 +252,7 @@ function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean, rng: Rng): nu
 
 ```
 morningRoutineMin = ROUTINE_BASE + snoozeCount × SNOOZE_PER
-                   (25 分钟基础)     (每次 9 分钟，最多 3 次 = +27 分钟)
+                   (25 分钟基础)     (每次 9 分钟，最多 6 次 = +54 分钟)
 ```
 
 ### 4.5 通勤结算（三档 · 含取消 roll + 天气/事件加时）
@@ -244,7 +261,7 @@ morningRoutineMin = ROUTINE_BASE + snoozeCount × SNOOZE_PER
 > - 「开车」选项已移除，原型只有 3 种通勤方式
 > - 快车取消：最多发生 0 或 1 次，**绝不会取消第二次**（重新叫的第二辆必然成功）
 > - 专车：取消率 0%（从不取消），但**不免疫**天气/事件加时
-> - 地铁：完全不受天气、事件、取消影响，永远 40 分钟 / 5 元
+> - 地铁：完全不受天气、事件、取消影响，永远 60 分钟 / 5 元
 
 ```typescript
 type CommuteId = 'subway' | 'express' | 'premium';
@@ -278,7 +295,7 @@ function calculateCommute(
 
   switch (choice) {
     case 'subway':
-      baseMin = 40;   baseCost = 5;   cancelRate = 0;    immune = true;  break;
+      baseMin = 60;   baseCost = 5;   cancelRate = 0;    immune = true;  break;
     case 'express':
       baseMin = 25;   baseCost = 30;  cancelRate = 0.30; immune = false; break;
     case 'premium':
@@ -314,7 +331,7 @@ function calculateCommute(
 arriveMin  = alarmMin + morningRoutineMin + commuteResult.commuteMin;
 balance   -= commuteResult.commuteCost;
 
-isLate    = arriveMin > CLOCKIN_DEADLINE;   // > 600 算迟到
+isLate    = arriveMin > CLOCKIN_DEADLINE;   // > 540 算迟到
 lateMin   = arriveMin - CLOCKIN_DEADLINE;   // 迟到分钟数（仅展示用）
 ```
 
@@ -330,10 +347,13 @@ Day 0 开局：
   总资金 = 50 + 12×20 = 290 元（理论上限）
 
 商店消费（睡前 Screen）：
-  balance -= 对应价格
+  if (balance >= 对应价格 && 购买请求合法) balance -= 对应价格
+  else 拒绝操作，不改变状态
 
 通勤消费：
-  balance -= 对应通勤费用
+  余额不足的通勤选项不可选择；非法请求被拒绝，不改变状态
+  if (balance < 5) 没有任何可负担通勤 → CANNOT_AFFORD_COMMUTE
+  else 选择可负担通勤后 balance -= 对应通勤费用
 
 贿赂（迟到时办公室 Screen）：
   if (!bribeUsed) {
@@ -361,7 +381,7 @@ Day 0 开局：
 
 | 中文名 | 内部 ID | 基础耗时 | 单次费用 | 取消概率 | 天气/事件影响 | 一句话定位 |
 |-------|--------|---------|---------|---------|-------------|----------|
-| 🚇 地铁 | `subway` | **40 分钟**（固定）| **5 元** | 0% | ❌ 完全免疫（0 加时）| **稳但慢**：永远 40 分/5 元，100% 准点 |
+| 🚇 地铁 | `subway` | **60 分钟**（固定）| **5 元** | 0% | ❌ 完全免疫（0 加时）| **稳但慢**：永远 60 分/5 元，耗时确定但不保证赶上打卡 |
 | 🚕 快车 | `express` | **25 分钟** | **30 元** | **30%**（取消 +10 分，最多取消 1 次）| ✅ 下雪 +15 / 事件 +15/+20 | **性价比之选**：便宜一半但赌取消率，还受天气事件影响 |
 | 🚘 专车 | `premium` | **25 分钟** | **60 元**（快车 2 倍）| **0%**（从不取消）| ✅ 下雪 +15 / 事件 +15/+20（不免疫）| **稳但贵**：60 元买「从不取消」，但天气/事件照样加时，不如地铁稳 |
 
@@ -371,14 +391,22 @@ Day 0 开局：
 
 | 中文名 | 内部 ID | 类型 | 价格 | 效果 | 到货规则 |
 |-------|--------|------|------|------|---------|
-| 软枕头 | `pillow` | 可重复（永久）| 40 元 | SOL -6 分钟 | **次日晚**：Day N 睡前买 → Day N+1 睡前 calculateSOL 生效 |
-| 眼罩 | `eyeMask` | 可重复（永久）| 18 元 | SOL -4 分钟 | 次日晚 |
-| 耳塞 | `earPlugs` | 可重复（永久）| 12 元 | SOL -3 分钟 | 次日晚 |
+| 软枕头 | `pillow` | 永久物品（限购 1 个）| 40 元 | SOL -6 分钟 | **次日晚**：Day N 睡前买 → Day N+1 睡前 calculateSOL 生效 |
+| 眼罩 | `eyeMask` | 永久物品（限购 1 个）| 18 元 | SOL -4 分钟 | 次日晚 |
+| 耳塞 | `earPlugs` | 永久物品（限购 1 个）| 12 元 | SOL -3 分钟 | 次日晚 |
 | DORA | `dora` | 消耗品（颗）| 20 元/颗 | SOL -15 分钟，无耐药 | **当晚立刻**：买了当天 calculateSOL 就能用（安眠药例外规则）；库存剩余颗数，吃 1 颗 inventory.dora -= 1 |
-| 智能台灯 | `smartLamp` | 可重复（永久）| 95 元 | rollSnoozeCount 中 expected × 0.65 | 次日晚 |
+| 智能台灯 | `smartLamp` | 永久物品（限购 1 个）| 95 元 | rollSnoozeCount 中 expected × 0.65 | 次日晚 |
 
 **SOL 最大削减量验证**：枕头-6 + 眼罩-4 + 耳塞-3 + DORA-15 = **-28 分钟**  
 45 - 28 = 17 分钟 ≥ SOL_MIN(10)。✅ 合规。
+
+#### 商店与 DORA 边界规则（2026-08-05 确认）
+
+- 余额永远不得低于 0；余额不足时购买请求必须被拒绝，不扣款、不改变状态。
+- 枕头、眼罩、耳塞、智能台灯已经拥有或已在 `pendingArrivals` 中时，不得重复购买。
+- DORA 购买数量必须是正整数；允许一次购买多颗，余额必须覆盖全部数量。
+- 每晚最多服用 1 颗 DORA。第一次成功服用后设置 `doraUsedTonight=true` 并扣 1 颗；当晚重复操作不得再次扣库存。
+- DORA 永远当晚进入 `inventory.dora`，不进入 `pendingArrivals`。
 
 ### 5.3 经济参数
 
@@ -391,6 +419,10 @@ Day 0 开局：
 | 贿赂可用次数 | 1 次 | 用过后第二次迟到直接 Game Over |
 | 全勤奖 | 取消 | 方案 A，通关无额外奖励 |
 | 结算到手金额 | = `balance`（最终余额）| 通关或失败都只看最终余额 |
+
+**余额硬规则（2026-08-05 确认）**：`balance` 始终大于或等于 0。买不起某个商品或通勤方式时，该选项不可用；这本身不判负。只有连最便宜的 5 元地铁也买不起时才以 `CANNOT_AFFORD_COMMUTE` 失败。迟到后余额不足 180 元则以 `CANNOT_AFFORD_BRIBE` 失败。
+
+**成绩规则（D-11，2026-08-06 确认）**：通关是第一目标；最终余额是通关后的次级分数，可用于分享或排行榜。失败局仍展示余额，但不进入正式成绩比较，也不能以高余额胜过任何通关局。
 
 ---
 
@@ -435,7 +467,8 @@ interface PendingArrivals {
 
 interface GameState {
   // 基础
-  dayIndex: number;             // 0 ~ 13（Day0=开局介绍；Day1~12=游戏循环；Day13=结算日，不进循环）
+  phase: GamePhase;             // 判别字段；reducer 必须按 phase 限制当前合法 Action
+  dayIndex: number;             // 0 ~ 12（Day0=开局介绍；Day1~12=游戏循环；Result 不占 Day 编号）
   balance: number;              // 余额
   sleepDebt: number;            // 当前累计睡眠债（分钟）
   bribeUsed: boolean;           // 贿赂是否用过
@@ -464,13 +497,26 @@ interface GameState {
   isLate?: boolean;
   weatherToday?: WeatherLogic;  // 'clear' | 'snow'
   eventToday?: EventId | null;  // null | 'concert' | 'expo' | 'marathon' | 'holidayRush'
+  eventBonusMin?: number;       // rollEvent 当天一次生成并保存的 0 / 15 / 20，通勤阶段不重新 roll 或推导
 
   // 结算回顾
-  dailyLog: DayRecord[];        // Day 结束时 push，长度 = 已结束的 Day 数（Day13=结算日也 push 1 条总结）
+  dailyLog: DayRecord[];        // 只记录已结束的 Day 1~12；Result 不写入日志
 }
 
+type GamePhase =
+  | 'intro'
+  | 'bedtime'
+  | 'sleeping'
+  | 'wakeup'
+  | 'commute'
+  | 'office'
+  | 'bribe'
+  | 'result';
+
+> 上面的 `GameState` 是领域字段总览。真实 TypeScript 实现必须使用以 `phase` 为判别字段的联合类型，把各阶段必需字段设为必填，不能继续依赖大量 optional 字段和 UI 调用顺序维持合法性。
+
 interface DayRecord {
-  day: number;                  // 1 ~ 12
+  day: number;                  // 1 ~ 12；Result 不生成 DayRecord
   isWorkDay: boolean;
   alarmHHMM?: string;
   sleepHHMM?: string;
@@ -494,7 +540,7 @@ interface DayRecord {
 | `clear` | 不下雪 | ☀️晴 / ⛅多云 / ☁️阴 / 🌫️雾霾（4 选 1，roll 时随机 flavor）| 快车/专车 +0 分钟，地铁 +0 |
 | `snow` | 下雪 | 🌨️小雪 / ❄️中雪（2 选 1，暴雪 flavor 已移除）| 快车/专车 **+15 分钟**（你定的）；地铁不受影响 |
 
-> 专车不免疫下雪加时（你定的），所以专车在下雪天是 25+15=40 分钟，和地铁一样耗时但贵 55 元；快车在下雪天 25+15=40 分钟，也和地铁同速但贵 25 元——下雪天地铁性价比最高。
+> 专车不免疫下雪加时，所以专车在下雪天为 25+15=40 分钟；快车在未取消时也是 40 分钟。两者仍比 60 分钟地铁快，但价格更高，且快车保留取消风险。
 
 ### 7.2 天气发生分布（固定骨架 + 随机扰动）
 
@@ -546,7 +592,7 @@ interface DayRecord {
    - 原型阶段暂不实现（若以后加也是 1% 左右极稀有）
 ```
 
-**实现机制四要素（必须遵守，2026-08-05 补全）：
+**实现机制四要素（必须遵守，2026-08-05 补全）：**
   1. 数据结构：GameState.usedEventFlavors: string[] —— 已用普通事件 flavor 池，
      初始空数组，**全生命周期不 reset**（避免未来 Day8~11 若加普通事件时也不会重复）。
   2. 谁负责写入：调用 rollEvent() 的一方（reducer.onEnterBedtime）——
@@ -564,7 +610,7 @@ interface RollEventResult {
 }
 
 /**
- * @param dayIndex          0~13
+ * @param dayIndex          0~12
  * @param usedEventFlavors 已用 flavor 池（排除已用）
  * @param rng              可复现随机数注入（禁止 Math.random）
  */
@@ -593,6 +639,14 @@ function rollEvent(
   新（25 cap）：25 基础 + 25 加时封顶 = 50 分钟通勤
 ```
 
+### 8.4 RNG 公平性目标（D-9，2026-08-06 确认）
+
+- 运气是游戏体验的一部分，允许充分准备的玩家仍因不可规避随机结果失败。
+- 为避免短小游戏产生过强挫败感，使用“充分准备并按已揭示信息选择安全方案”的参考策略运行完整一局时，**纯 RNG 导致的整局失败率必须低于 25%**。
+- 玩家主动选择快车等高风险方案后因取消失败，仍计入随机性影响统计，但模拟报告必须与“安全参考策略下的不可规避 RNG 失败”分开呈现。
+- 因早期消费、闹钟或通勤决策不当造成的资金不足或迟到不归类为纯 RNG 失败。
+- 25% 是上限约束，不是期望值；具体实际比例由模拟器数据决定。
+
 ---
 
 ## 9. 10 天工作日难度日历（最终版）
@@ -618,6 +672,7 @@ function rollEvent(
 
 ```typescript
 const INITIAL_STATE: GameState = {
+  phase: 'intro',
   dayIndex: 0,
   balance: 50,
   sleepDebt: 0,                    // 开局无欠债
@@ -627,7 +682,6 @@ const INITIAL_STATE: GameState = {
     eyeMask: false,
     earPlugs: false,
     smartLamp: false,
-    dora: 0,
   },
   pendingArrivals: {
     pillow: false,
@@ -644,10 +698,11 @@ const INITIAL_STATE: GameState = {
 ### 10.2 每个 Day 的 Bedtime Screen 启动钩子
 
 ```typescript
-function onEnterBedtime(state: GameState): void {
+function onEnterBedtime(state: GameState): GameState {
+  const next = cloneGameState(state); // 伪代码：真实实现可用结构化 immutable update
   // Step 1: 发日工资（Day 1~Day 12，Day 0 不发）
-  if (state.dayIndex >= 1 && state.dayIndex <= 12) {
-    state.balance += 20;
+  if (next.dayIndex >= 1 && next.dayIndex <= 12) {
+    next.balance += 20;
   }
 
   // Step 2: 周末 or 工作日 → 决定是否显示闹钟 UI（周末隐藏）
@@ -655,6 +710,8 @@ function onEnterBedtime(state: GameState): void {
   //          双灾叠加时通勤加时统一 cap 到 MAX_COMMUTE_BONUS = 25 分钟（§8.3）
   // Step 4: 处理 pendingArrivals → 合并进 inventory（昨日买的次日到货）
   // Step 5: 显示天气/事件预报给玩家（仅工作日）
+  // 真实实现 immutable 返回新状态，并把 phase 转为 'bedtime'；不得重复发工资或重复处理到货
+  return next;
 }
 ```
 
@@ -662,34 +719,39 @@ function onEnterBedtime(state: GameState): void {
 
 ```typescript
 // Day N 睡前 Screen 启动时调用（合并 Day N-1 买的次日到货物品）
-function applyPendingArrivals(state: GameState): void {
-  const p = state.pendingArrivals;
-  if (p.pillow)    { state.inventory.pillow = true;    p.pillow = false; }
-  if (p.eyeMask)   { state.inventory.eyeMask = true;   p.eyeMask = false; }
-  if (p.earPlugs)  { state.inventory.earPlugs = true;  p.earPlugs = false; }
-  if (p.smartLamp) { state.inventory.smartLamp = true; p.smartLamp = false; }
+function applyPendingArrivals(state: GameState): GameState {
+  const next = cloneGameState(state);
+  const p = next.pendingArrivals;
+  if (p.pillow)    { next.inventory.pillow = true;    p.pillow = false; }
+  if (p.eyeMask)   { next.inventory.eyeMask = true;   p.eyeMask = false; }
+  if (p.earPlugs)  { next.inventory.earPlugs = true;  p.earPlugs = false; }
+  if (p.smartLamp) { next.inventory.smartLamp = true; p.smartLamp = false; }
   // ⚠️ C-6 决策：DORA 不进 pendingArrivals，买了当晚立刻进 inventory.dora，无此处理分支
+  return next;
 }
 
 // 玩家在睡前 Screen 购买物品时调用（DORA 当晚进 inventory，其他进 pendingArrivals）
 // itemId: ShopItemId 字面量联合（'pillow'|'eyeMask'|'earPlugs'|'dora'|'smartLamp'），
 //   不是宽泛 string，避免拼写错误绕过编译检查
 // qty: 仅 dora 支持多颗（默认为 1），其他 4 种永久道具 qty 固定 1
-function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): void {
+function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameState {
+  const next = cloneGameState(state);
   const n = qty ?? 1;
   switch (itemId) {
     case 'pillow':
     case 'eyeMask':
     case 'earPlugs':
     case 'smartLamp':
-      state.balance -= PRICES[itemId];
-      state.pendingArrivals[itemId] = true;   // 次日晚生效
+      next.balance -= PRICES[itemId];
+      next.pendingArrivals[itemId] = true;   // 次日晚生效
       break;
     case 'dora':
-      state.balance -= PRICES.dora * n;
-      state.inventory.dora += n;             // 当晚立刻进库存（买了就能吃）
+      next.balance -= PRICES.dora * n;
+      next.inventory.dora += n;             // 当晚立刻进库存（买了就能吃）
       break;
   }
+  // 真实实现还必须在扣款前执行 §5.2 的余额、重复购买、qty 和单晚 DORA 规则
+  return next;
 }
 ```
 
@@ -702,9 +764,12 @@ function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): void {
 | # | 项目 | 说明 | 建议草稿值（原型先用）|
 |---|------|------|--------------------|
 | P1-1 | 结算画面文案 | 通关/失败/不同余额区间的讽刺文案（需要 10~15 条）| — |
-| P1-2 | 平衡性调整 | 跑模拟器 10 万局后根据通关率微调：SOL / 通勤费 / 取消率 / 下雪概率 | 当前值作为起点 |
+| P1-2 | 平衡性调整 | 跑模拟器 10 万局后根据通关率微调：SOL / 通勤费 / 取消率 / 下雪概率 | 当前值作为起点；目标口径待 D-10 决策 |
 | P1-3 | 前端 flavor 映射 | 天气 flavor 随机池的具体文案/图标命名 | §7.1 已列 6 种 flavor |
-| P1-4 | 「余额为负时能不能买通勤/贿赂」边界 | 例如 balance=0 地铁 5 元也买不起怎么办 | 建议：买不起地铁 → Game Over（没路费=没法上班=算迟到）|
+| D-8 | 固定保守策略是否允许无脑通关 | **已确认首轮实验组**：09:00 打卡；地铁 60 分钟；snooze 上限 6 次、每次 9 分钟；睡眠债衰减 0.5；地铁风险 0% | 07:00 + 地铁在 0~3 次 snooze 时准时，4~6 次时迟到；`SNOOZE_GRADIENT=100`、晨间流程 25 分钟及其他参数首轮不变，待模拟器验证后再调 |
+| D-9 | 是否允许不可规避的纯 RNG 死亡 | **已确认**：允许运气造成失败，但安全参考策略下纯 RNG 导致的整局失败率必须低于 25% | 统计口径见 §8.4 |
+| D-10 | 模拟器目标通关率 | **延期决定**：最终目标区间必须基于分策略模拟数据讨论，现在不预设 40%~60% 等结论 | 现在先规划策略分组、失败归因和输出指标，模拟器完成后拍板 |
+| D-11 | 最终余额的地位 | **已确认**：通关是主目标；最终余额是通关后的次级分数；失败局余额只展示、不参与正式成绩比较 | 见 §5.3 |
 
 ### P2：可后补，不阻塞原型
 

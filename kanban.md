@@ -1,8 +1,8 @@
 # 《别迟到》看板 Kanban
 
 > **维护规则**：✅ 已完成 = 简略（必要时用 checklist 扫一眼确认） | ⏳ 待做 = 详细写
-> **单一信息中心**：任何方案改动先改这里再改代码
-> **数值机制权威来源**：`game_spec.md`（本看板不重复数值表，只引用 §编号）
+> **职责**：本文件只维护进度、任务、风险和待决事项；机制、数值、状态流与边界规则以 `game_spec.md` 为唯一权威来源，变更先在规格定稿再同步任务。
+> **作废文件**：`design_backup_old.md` 仅作历史保留，不得引用、采用或更新。
 
 ---
 
@@ -13,8 +13,8 @@
 | 0 | 设计文档 & 数值拍板 & 方案确认 | ✅ 完成 | game_spec v1.1 + 4 阶段流程 + 7 优化点 + 目录结构约定 |
 | 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3⏳） | 基础设施+5核心函数已交付（commit c82ecbd）；待做 shop/reducer + 模拟器 + 单测 |
 | 2 | 命令行可交互版 | ⏳ 待开始 | `src/cli.ts`，终端手动玩一局 |
-| 3 | Web UI | ⏳ 待开始 | 响应式网页 6 个 Screen |
-| 4 | 平衡调优 + 文案 | ⏳ 待开始 | 10 万局通关率 30%~50%，P1 TODO 全清 |
+| 3 | Web UI | ⏳ 待开始 | 响应式网页：Intro + 5 个工作日 Screen + Result，共 7 个逻辑 Screen |
+| 4 | 平衡调优 + 文案 | ⏳ 待开始 | 10 万局模拟；通关率口径待 D-10 确认；P1 TODO 全清 |
 
 ---
 
@@ -31,12 +31,12 @@
 - [x] 目录结构约定确定（见下方「开发规范」区）
 
 **机制 & 数值拍板（全部对齐 game_spec）**
-- [x] 时间模型：整数分钟（0=00:00, 600=10:00），前端展示转 HH:MM
+- [x] 时间模型：整数分钟（0=00:00, 540=09:00），前端展示转 HH:MM；D-8 首轮实验值
 - [x] Day 编号：Day 0（开局）~ Day 12（最终日），off-by-one 已解决
 - [x] 日历：5 工作日 + 2 周末 + 5 工作日；周末 sleepDebt ×0.5 衰减（两天后剩 25%）
 - [x] sleepDebt：目标睡眠 480min，每日衰减 50%
 - [x] SOL：基础 45min，下限 10min
-- [x] Snooze：溢出概率法单 roll（链式正确，1500 万次验证无跳号），每次 9min 上限 3 次；台灯 ×0.65
+- [x] Snooze 目标参数：溢出概率法单 roll，每次 9min、上限 6 次；台灯 ×0.65。现有代码仍为上限 3 次，接管代码整理时同步更新并重做分布测试
 - [x] 通勤 3 档（移除「开车」）：🚇 地铁免疫 / 🚕 快车 30% 取消 / 🚘 专车 0% 取消但不免疫天气事件
 - [x] 天气：逻辑 2 层（clear / snow+15min），展示 6 flavor
 - [x] 城市事件：Day 4/5 独立 50% roll（3 flavor 不重复，+15）；Day 12 固定节前高峰 +20
@@ -45,6 +45,18 @@
 - [x] 命名规范：常量 UPPER_SNAKE / 变量 camelCase / 类型 PascalCase / 函数 camelCase
 - [x] 原型移除项确认：开车、限行、车牌、油电区分、唑吡坦（传统安眠药）、地铁故障、纯随机堵车概率
 
+### Takeover 决策收敛（2026-08-05，已批准）
+
+- [x] 文档层级：`game_spec.md` 管机制/数值/状态流/边界，`kanban.md` 管任务和进度，README 只做摘要
+- [x] `design_backup_old.md` 已作废：不采用、不引用、不更新
+- [x] 睡眠债时序：`morningDebt = previousCarriedDebt × 0.5 + newDebtTonight`，当晚新债立即影响紧接着的早晨；通勤后不二次衰减
+- [x] 状态机方向：采用带 `phase` 的判别联合，由 reducer 自行拒绝非法 Action，不再依赖 UI 调用顺序维持合法性
+- [x] Result 建模：Day 只到 12；结算页是 `GameResult/result phase`，不叫 Day 13，也不写入 `dailyLog`
+- [x] 余额硬规则：不允许负余额；买不起某个选项时禁用/拒绝，只有连 5 元地铁都买不起才 `CANNOT_AFFORD_COMMUTE`
+- [x] 商店边界：永久物品已拥有或 pending 时不能重复购买；DORA 数量必须为正整数，每晚最多服用 1 颗
+- [x] 接管整理获批：先统一文档、状态模型、断言和当前函数测试；在新的开发批准前不进入 shop/reducer/CLI/UI 功能实现
+- [x] D-8 首轮实验组：09:00 打卡；地铁 60min/5元且风险 0%；snooze 每次 9min、上限 6 次；睡眠债衰减 0.5；`SNOOZE_GRADIENT=100` 与晨间流程 25min 暂不调整
+
 ---
 
 ### 阶段 1-1：基础设施（2026-08-03 · commit c82ecbd）
@@ -52,7 +64,7 @@
 - [x] 工程脚手架：`package.json`（5 scripts + 6 devDeps）、`tsconfig.json`（strict ES2020）、`jest.config.js`（30s 超时）、`.gitignore`
 - [x] 常量分层：`constants.ts` 23 个硬锚点 UPPER_SNAKE + `config/balance.ts` 全部平衡参数 `let` 化 + `resetBalanceToDefaults()` 便于扫描
 - [x] RNG 可复现：`random.ts` mulberry32 算法 + `createRngFromString`（FNV-1a）+ `rngInt` / `rngPickIndex` 工具
-- [x] 类型系统：`types.ts` 全套接口 — GameState（含 `usedEventFlavors`）/ Action 判别联合 / GameResult（play|win|lose + 4 种 LoseReason 分型）/ DayRecord / EngineDeps / CommuteResult 等
+- [x] 类型系统：`types.ts` 全套接口 — GameState（含 `usedEventFlavors`）/ Action 判别联合 / GameResult（playing|win|lose + 4 种 LoseReason 分型）/ DayRecord / EngineDeps / CommuteResult 等
 - [x] 唯一出口：`index.ts` barrel export（CLI/UI 禁止直接 import 内部路径），已导出 constants / Balance 命名空间 / types / RNG / 5 核心函数
 - [x] `tsc --noEmit` strict 模式 0 错误；Node 26 / npm 11 环境确认无需升级（已满足 engines >=20）
 
@@ -61,8 +73,8 @@
 ### 阶段 1-2：五大核心函数（2026-08-03 · commit c82ecbd）
 
 - [x] `calculateSOL()`：base -6/-4/-3 永久道具 + -15 DORA 消耗品，下限 SOL_MIN 10，纯函数无 rng
-- [x] `rollSnoozeCount()`：溢出概率法单 roll（expected 整数部分必触发 + 小数概率 +1），台灯 ×0.65，SNOOZE_MAX 3 硬上限；**4500 万次三场景严格验证零跳号**（debt=80 仅 0/1，debt=150 仅 1/2，debt=250 仅 2/3）
-- [x] `calculateCommute()`：三档 switch（subway immune 40m/5¥；express 25m/30¥ 30% 取消 +10m**最多 1 次**；premium 25m/60¥ 不取消但受天气事件）；bonusMin 仅非免疫加：下雪 +15 / eventBonus +0/+15/+20
+- [x] `rollSnoozeCount()`：现有实现为 SNOOZE_MAX 3，历史 4500 万次验证无跳号；D-8 已将目标值改为 6，代码更新后必须扩展分布与边界测试
+- [x] `calculateCommute()`：现有实现的地铁仍为 40m/5¥；D-8 已将目标值改为 60m/5¥、保持免疫和 0% 风险，代码更新后必须重跑测试
 - [x] `rollWeather(dayIndex, rng)`：Day1 强制 clear，Day12 70% snow，普通工作日 Day2/3/4/5/8/9/10/11 下雪率 20%（与城市事件 roll 完全独立，2026-08-05 机制简化移除了 hasEventToday 参数和 Day4/5 有事件叠加雪的分支）
 - [x] `rollEvent(dayIndex, usedFlavors, rng)` → `{eventId, bonusMin, newlyUsedFlavor?}`：Day12 固定 holidayRush +20，Day4/5 各 50% 从 3 flavor 池**不重复抽取**+15，其余 null +0
 - [x] 冒烟分布验证（10k 样本）：Day12 雪 70.5% / 普通 19.9% / 快车取消 30.2% / Day4-5 触发 50.1%，全部落在 ±1% 区间
@@ -119,25 +131,21 @@
 **文件**：
 - `src/engine/shop.ts`
   - `applyPendingArrivals(state: GameState): GameState` — §10.3：把 pendingArrivals 里的 pillow/eyeMask/earPlugs/smartLamp 置 true 进 inventory，pending 对应字段清空（⚠️ C-6 决策：DORA 永远当晚进 inventory，不在 pendingArrivals 队列里）
-  - `onBuyItem(state: GameState, itemId: string, qty?: number): GameState` — DORA 当晚进 `inventory.dora`（扣钱 × qty）；其余 4 种进 `pendingArrivals`（扣钱，次日到货）。价格从 `config/balance.ts` 读
+  - `onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameState` — DORA 当晚进 `inventory.dora`；其余 4 种进 `pendingArrivals`。执行余额非负、永久物品不可重复购买、DORA qty 正整数等规则
 - `src/engine/engine.ts`
-  - 导出 `INITIAL_STATE: GameState`（对齐 game_spec §10.1，balance=50, debt=0, bribeUsed=false, 全空 inventory）
+  - 导出 `INITIAL_STATE: GameState`（`phase='intro'`，dayIndex=0，balance=50，debt=0，bribeUsed=false，全空 inventory）
   - 导出核心：`reducer(state: GameState, action: Action, deps: {rng: Rng}): GameResult`
-  - Action 处理：
-    - `SET_ALARM(min)` → 写 `state.alarmMin`，校验 420~600 且能被 5 整除，非法输入**抛 Error**（调用方 UI 层应做校验，reducer 直接报让调用方尽早发现 bug）
-    - `BUY_ITEM(id, qty)` → 调 `onBuyItem`；余额不够**抛 Error**（商店不判输，UI 拦截不让买）
-    - `USE_DORA_TONIGHT` → 如果 `inventory.dora > 0`，dora -= 1，设置临时标记 `doraUsedTonight=true`（存在 `state` 里）
-    - `CHOOSE_COMMUTE(id)` → 调 `calculateCommute`，扣 balance（不够就 `CANNOT_AFFORD_COMMUTE` lose），算 arriveMin，判 isLate（>600）。不迟到：直接走 day-advance 流程。迟到：内联处理贿赂分支：若 bribeUsed=false 且 balance≥180 则给玩家一个 CHOOSE_BRIBE / DECLINE_BRIBE 决策（由调用方上下文决定，不在 state 里挂起，因为 #7 决策移除了 pendingBribe 防御字段）
-    - `CHOOSE_BRIBE` → 仅在「当前 CHOOSE_COMMUTE 迟到且能贿赂」的上下文下调用；检查 bribeUsed=false 且 balance ≥ 180：扣 180，bribeUsed=true，清 isLate，走 day-advance；余额不够 → `CANNOT_AFFORD_BRIBE` lose
-    - `DECLINE_BRIBE` → `lose reason=REFUSED_BRIBE`
-    - `PASS_WEEKEND` → sleepDebt × 0.5，newDebt=0，dayIndex+1，记 dailyLog
-  - day-advance 流程（工作日 CHOOSE_COMMUTE 成功后或贿赂完成后）：
-    1. effectiveDebt_next = sleepDebt × 0.5 + newDebtTonight
-    2. 写 dailyLog（DayRecord：day 编号、工作日、闹钟 HH:MM、实际睡眠、debt 后值、snoozeCount、通勤中文名、到达 HH:MM、isLate、余额）
-    3. dayIndex += 1
-    4. 如果 dayIndex > 12 且最后一天打卡成功 → `status='win' finalBalance=balance`
-    5.- 否则返回 `status='playing'`
-  - **#7 决策（2026-08-05）：移除 pendingBribe / dailyWageCredited 两个防御性字段，改由调用方上下文约定 Action 发送顺序**。不再有「pendingBribe 挂起时拒绝其他 Action」的有限状态机规则；调用方（CLI/UI）必须严格按照 Screen 流转发 Action。
+  - `GameState` 改为以 `phase` 判别的联合：`intro → bedtime → sleeping → wakeup → commute → office/bribe → result`
+  - reducer 必须依据 `phase` 限制合法 Action；任何跨阶段、重复或乱序 Action 都拒绝，不依赖 UI 自律
+  - 进入 Day 的原子流程：发当日工资一次、合并到货一次、独立 roll 天气与事件一次、保存 `weatherToday/eventToday/eventBonusMin`，然后进入 `bedtime`
+  - `SET_ALARM(min)`：仅 `bedtime` 工作日合法，校验 420~600 且能被 5 整除
+  - `BUY_ITEM(id, qty)`：仅 `bedtime` 合法；余额不足或违反商店边界时拒绝操作，不改变状态
+  - `USE_DORA_TONIGHT`：仅 `bedtime` 合法；库存 >0 且当晚尚未服用时扣 1 颗，每晚最多一次
+  - 开始睡眠后计算 `newDebtTonight`，再执行 `sleepDebt = previousCarriedDebt × 0.5 + newDebtTonight`；紧接着的 snooze 使用更新后的 debt
+  - `CHOOSE_COMMUTE(id)`：仅 `commute` 合法；买不起所选方式时拒绝操作。若余额 <5 无任何可选通勤，则 `CANNOT_AFFORD_COMMUTE`
+  - 迟到后进入明确的 `bribe` phase；只有该 phase 接受 `CHOOSE_BRIBE/DECLINE_BRIBE`。不足 180 元为 `CANNOT_AFFORD_BRIBE`，已使用贿赂则为 `SECOND_LATE`
+  - `PASS_WEEKEND`：仅周末 `bedtime` 合法，sleepDebt ×0.5、newDebt=0、写 DayRecord 后进入下一天
+  - day-advance：写 Day 1~12 的 `dailyLog`；Day 12 成功后直接返回 `status='win'` 和 `phase='result'`，不创建 Day 13 或 Result DayRecord
 
 ---
 
@@ -153,10 +161,13 @@
   - 通勤：下雪或有事件 → 地铁；否则 → 快车；balance ≥ 100 且下雪 + 事件叠加 → 专车
   - DORA：SOL 计算前，如果 (alarmMin - SOL_BASE) < 480 就吃 1 颗
 - 输出统计：
-  - 总场次 / 通关率 / Day12 通关率（通关且最后一天赢的比率）
+  - 至少分别运行三类策略：固定策略、普通自适应策略、安全/近最优参考策略；禁止只输出混合总体通关率
+  - 每类策略的总场次 / 通关率 / Day12 通关率（通关且最后一天赢的比率）
   - 平均最终余额 / 通关局平均余额 / 失败局平均余额
   - 失败原因饼图（4 种 LoseReason 各占 %）
   - 死亡日分布（Day 1~12 各死了多少次）
+  - 失败归因：决策失败 / 资源规划失败 / 主动承担风险后的 RNG 失败 / 安全参考策略下不可规避的 RNG 失败
+  - D-9 验收指标：安全参考策略完整一局的纯 RNG 失败率 <25%
   - 打印用时 + 可复现 seed
 
 CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k` → 跑 10000 局
@@ -170,12 +181,12 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
   1. debt=0 → 期望 0 次，实际 0 次（100 万次 roll 不出 >0）
   2. debt=100 有灯 → 期望 0.65 次，分布收敛到约 65% 出 1 次
   3. debt=300 → 期望 3.0 次，实际就是 3 次（无随机性）
-  4. **不跳号断言**：1500 万次 roll 中，出现 count=2 的前一次一定是 count≥1（即从不出现从 0 直接跳到 2）—— game_spec 里专门提过的 bug 防止
+  4. **不跳号断言**：对 debt=80/150/250 分别断言结果集合只能是 `{0,1}` / `{1,2}` / `{2,3}`；独立 roll 之间不比较“前一次”结果
   5. 有灯 vs 无灯：同 debt 下，平均次数比值接近 0.65（±1%）
 - `src/tests/commute.test.ts` — 必测项：
-  1. 地铁：任何 isSnow/eventBonus 组合都返回 40min/5元/cancelled=false
+  1. 地铁：任何 isSnow/eventBonus 组合都返回 60min/5元/cancelled=false
   2. 快车 clear 无事件：25min/30元，取消率约 30%（固定 rng seed 下精确断言）
-  3. 快车 + 下雪 + 事件 +15：base25 + 雪15 + 事件15 = 55min，取消时 +10 = 65min
+  3. 快车 + 下雪 + 事件 +15：加时 `min(15+15,25)=25`，所以不取消 50min、取消时 60min
   4. 快车取消最多 1 次：即使 rng 连续 100 次 <0.3，实际 cancelled 只影响 1 次（bonusMin 只加 10，不会 20）
   5. 专车：从不 cancelled，但雪和事件加时正确
 - `src/tests/engine.test.ts` — 整局变体测试：
@@ -195,9 +206,16 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
 
 #### P1（原型早期必补，不补会出体验坑）
 - [ ] P1-1 结算画面文案：通关 / 失败 / 不同余额区间的讽刺文案 10~15 条
-- [ ] P1-2 平衡性调整：跑模拟器 10 万局后微调 SOL / 通勤费 / 取消率 / 下雪概率，目标通关率 30%~50%
+- [ ] P1-2 平衡性调整：跑模拟器 10 万局后微调 SOL / 通勤费 / 取消率 / 下雪概率；目标通关率口径待 D-10 确认
 - [ ] P1-3 前端 flavor 映射：天气 flavor 随机池的具体文案 / 图标命名（§7.1 已列 6 种：晴/多云/阴/雾霾/小雪/中雪）
-- [ ] P1-4 余额为负边界：买不起任何通勤（balance < 5 元地铁）的处理逻辑 → 建议：直接判 lose CANNOT_AFFORD_COMMUTE
+- [x] P1-4 余额边界已确认：不允许负余额；买不起某个选项时禁用/拒绝；balance < 5 无任何通勤时判 `CANNOT_AFFORD_COMMUTE`
+
+#### 下一轮需要用户确认（开始模拟器和平衡调优前）
+
+- [x] D-8 固定保守策略：采用首轮实验组——09:00 打卡、地铁 60min/5元且 0% 风险、snooze 每次 9min 上限 6 次、睡眠债衰减 0.5；其他参数首轮不变，模拟后再评估
+- [x] D-9 RNG 公平性：允许不可规避的纯 RNG 失败，但安全参考策略下整局纯 RNG 失败率必须 <25%；具体统计口径见 game_spec §8.4
+- [~] D-10 通关率口径：延期到模拟器提供分策略数据后决定；当前先实现固定/普通自适应/安全参考三类策略及失败归因，不预设最终目标区间
+- [x] D-11 余额定位：通关为主目标，最终余额为通关后的次级分数；失败局余额只展示、不参与成绩比较
 
 #### P2（可后补，不阻塞原型上线）
 - [ ] P2-1 闹钟 > 10:00 嘲讽彩蛋文案（"不如直接去公司睡？"风格）
@@ -259,12 +277,12 @@ Dont_be_late/
 
 ### 关键锚点速查（不想查 game_spec 时瞟一眼，数值以 game_spec 为准）
 
-- 打卡截止：600 分钟 = 10:00
+- 打卡截止：540 分钟 = 09:00（D-8 首轮实验值）
 - 目标睡眠：480 分钟 = 8 小时
 - sleepDebt 每日衰减：× 0.5
 - SOL 基础 45 分钟 / 下限 10 分钟
-- ROUTINE_BASE 25 + snooze 每次 9（上限 3 次，+27）
-- 通勤三档：🚇 地铁 40m/5元(免疫) | 🚕 快车 25m/30元(30%取消+10m) | 🚘 专车 25m/60元(不取消)
+- ROUTINE_BASE 25 + snooze 每次 9（上限 6 次，+54；D-8 首轮实验值）
+- 通勤三档：🚇 地铁 60m/5元(免疫、0%风险) | 🚕 快车 25m/30元(30%取消+10m) | 🚘 专车 25m/60元(不取消)
 - 加时：下雪 +15 / 普通事件 +15 / 节前高峰 +20（可叠加后 cap 到 MAX_COMMUTE_BONUS = 25 分钟）
 - 贿赂 180 元 / 限 1 次 / 用过后第二次迟到必输
 - 资金：初始 50 + 12 天 × 20 = 理论上限 290 元
@@ -290,11 +308,10 @@ Dont_be_late/
 - [x] 🟡 kanban 关键锚点速查 L268 写「可叠加无上限」—— 已改成 25 min cap
 - [x] 🟡 §8.2 缺少 usedEventFlavors 实现四要素 —— §8.2 末尾补了完整 TS 签名 + 四要素规则
 - [x] 🟡 §2.2 SOL_BASE 常量分层（SOL_BASE 锚点 vs SOL_BASE_MINUTES 调参）文档未说明 —— §2.2 锚点表 + balance.ts 注释都已写明两者关系
-- [x] 🟡 kanban 1-3 reducer 方案的 `pendingBribe` FSM 规则与 #7 决策冲突 —— 已移除 FSM 挂起规则，重写为「调用方上下文约定」模式
+- [x] 🟡 旧版 `pendingBribe` 争议 —— takeover 决策已取代旧方案：使用 `phase='bribe'` 表达上下文，由 reducer 拒绝乱序 Action
 - [x] 🟡 kanban §10.3 `onBuyItem` itemId:string vs types.ts `ShopItemId` + qty 默认值不一致 —— game_spec 已同步为 `itemId: ShopItemId, qty?: number`
 - [x] 🟡 §2.2 机制常量锚点表缺少 `MAX_COMMUTE_BONUS = 25` 行 —— 已补
-- [x] 🟡 §2.3 `TOTAL_DAYS=13` 与 Day13 结算日定义边界不清 —— 已加说明：Day13 是展示层编号，不进 TOTAL_DAYS
-- [x] 🟡 types.ts 中 dayIndex 范围 0~12（你新决策是 0~13，Day13 结算日）—— 已修正，DayRecord.day 范围同步扩大到 1~13
+- [x] 🟡 Day13 边界 —— takeover 最终决策：Day 只到 12；Result 是 `GameResult/result phase`，不占 Day 编号、不写 `dailyLog`；现有 types.ts 的 0~13/1~13 注释等待接管代码整理时回改
 - [x] 🔴 C-6 PendingArrivals.dora 文档&接口矛盾（C-6 决策 X：不支持 DORA 次日到货）—— 从 types.ts PendingArrivals 接口删除 dora 字段；game_spec §6 PendingArrivals / §10.3 applyPendingArrivals 模板同步删除 dora 行；注释明确 DORA 永远当晚进 inventory
 - [x] 🔴 C-7 SOL_BASE 锚点 vs SOL_BASE_MINUTES 双份并行（C-7 决策 A：锚点权威 + 覆盖层）—— balance.ts SOL_BASE_MINUTES 改名 SOL_BASE_OVERRIDE（number\|null，null=用锚点 SOL_BASE=45）；sol.ts 改为 `SOL_BASE_OVERRIDE ?? SOL_BASE`；resetBalanceToDefaults 里 SOL_BASE_OVERRIDE=null 重置
 
@@ -304,11 +321,10 @@ Dont_be_late/
 
 | # | 来源 | 标题 | 一句话风险 | 推荐修复代码 / 规范链接 |
 |---|------|------|------------|-------------------------|
-| C-1 | 代码 4.1 | 所有对外函数缺 dayIndex / sleepDebt / eventBonus / CommuteId 范围断言 | sleepDebt=-50 会算出 -1 次 snooze → 早晨流程凭空少 9 分钟；非法 CommuteId 会导致 NaN 通勤时间和花费；dayIndex 越界静默返回错误值不抛错 | **统一在每个 barrel 导出函数顶部加范围断言**（建议写一个 `src/engine/asserts.ts` 工具模块）：<br>`assertIntegerInRange(dayIndex, 0, 13, 'rollWeather:dayIndex')`<br>`assertNonNegative(sleepDebt, 'rollSnoozeCount')`<br>`assertEnum(choice, ['subway','express','premium'], 'calculateCommute')`<br>commute switch 补 `default: throwUnknownEnum(choice)` |
+| C-1 | 代码 4.1 | 所有对外函数缺 dayIndex / sleepDebt / eventBonus / CommuteId 范围断言 | sleepDebt=-50 会算出 -1 次 snooze → 早晨流程凭空少 9 分钟；非法 CommuteId 会导致 NaN 通勤时间和花费；dayIndex 越界静默返回错误值不抛错 | **统一在每个 barrel 导出函数顶部加范围断言**：<br>`assertIntegerInRange(dayIndex, 0, 12, 'rollWeather:dayIndex')`<br>`assertNonNegative(sleepDebt, 'rollSnoozeCount')`<br>`assertEnum(choice, ['subway','express','premium'], 'calculateCommute')`<br>commute switch 补 `default: throwUnknownEnum(choice)` |
 | C-2 | 代码 4.3 + 4.1 | calculateCommute bonusMin 缺下限 0 保护 + eventBonus 范围断言 | 传负数 eventBonus 会让通勤时间缩短（作弊）；虽然正常调用不会传负，但作为公共 API 必须自证健壮 | `bonusMin = Math.max(0, Math.min(bonusMin, MAX_COMMUTE_BONUS))`（上下限双保护）；入口补 `assertIntegerInRange(eventBonus, 0, EVENT_HOLIDAY_BONUS_MIN || 20)` |
-| C-3 | 代码 1.1 | 阶段 1-3 关键文件缺失（实现空洞） | `INITIAL_STATE` / `reducer` / `applyPendingArrivals` / `onBuyItem` 在 barrel 里注释占位，但 `engine.ts` / `shop.ts` 文件根本不存在。CLI/UI 会编译失败。game_spec §10 已经给了实现模板 | 交接前至少写一个**骨架 stub**（函数存在，抛 `NotImplementedError`），并在 kanban 1-3 子任务里给每个函数贴上对应的 game_spec 章节号 + 伪代码链接，让新开发者「不用先找规范」 |
 | C-4 | 代码 4.4 | `rngInt(min, max)` 对 `min > max`（调用方传反）无断言 | 结果悄悄落在错误区间不抛错 —— 属于最难调试的「静默数值偏差」 | 入口加 2 行断言：<br>`if (min > max) throw new Error('rngInt: min>max')`<br>`if (!Number.isInteger(min)\|\|!Number.isInteger(max)) throw 'integer required'` |
-| C-5 | 代码 6.2 | GameState 15 个 runtime optional 字段无「阶段→非空」契约 | reducer 读取 `state.arriveMin` 时如果忘记初始化，会得到 undefined → `undefined + 25 = NaN` 链式污染全局 | 二选一：<br>**方案 A（推荐）**：交接文档里单独列一张「15 个 runtime 字段的写入阶段表」，并在 reducer 读取前统一用 `assertPresent(state, 'arriveMin')` 抛错<br>**方案 B（大改，可延后）**：把 GameState 拆成判别联合 `type GameState = { phase: 'bedtime'; ... bedtimeFields } \| { phase: 'commute'; ... }`，用类型系统保证非空 |
+| C-5 | 代码 6.2 | GameState 15 个 runtime optional 字段无「阶段→非空」契约 | reducer 读取未初始化字段会产生 `undefined/NaN` 链式污染 | **决策已定、代码待整理**：改为带 `phase` 的判别联合，每个阶段只暴露本阶段必需字段；reducer 同时做运行时 phase 校验 |
 
 ---
 
@@ -320,8 +336,8 @@ Dont_be_late/
 | C-9 | 代码 2.2 | weather.ts 手写 workDay 重复硬编码，没复用 `WORK_DAY_INDICES`；多写了 dayIndex===12（虽然进不到，但容易误导） | `const isWorkDay = WORK_DAY_INDICES.includes(dayIndex)` 一行替代 |
 | C-10 | 代码 2.3 + 6.1 | `NORMAL_EVENT_FLAVORS` 声明 `string[]`，丢了字面量类型，需要 `flavor as EventId` 断言 | 改为 `const NORMAL_EVENT_FLAVORS: readonly (EventId & string)[] = ['concert','expo','marathon'] as const;`，同时删除 `as EventId` 断言，避免拼写错误被类型系统吞掉 |
 | C-11 | 代码 4.2 | events.ts 手写 `Math.floor(rng()*N)`，没复用 `rngPickIndex`（统一了空数组保护） | `const idx = rngPickIndex(rng, remaining)`，保持所有随机整数走统一入口 |
-| C-12 | 代码 7.4 | balance let 参数缺 snapshot/restore 接口，参数扫描工具写起来麻烦 | balance.ts 加两个导出：<br>`getBalanceSnapshot(): Record<string, number>`<br>`applyBalanceSnapshot(snap): void` |
-| C-13 | 代码 6.2 | DayRecord 接口 9 个 optional 字段，没有「工作日 vs 周末 vs Day13 结算」子类型区分 | 交接文档里补一张「DayRecord 三类场景字段填充表」：工作日填全部 9 个；周末只填 day/isWorkDay/balanceAfter/sleepDebtAfter（4 个）；Day13 结算日只填 day/isWorkDay/finalBalance（3 个）|
+| C-12 | 代码 7.4 | 全局可变 balance 参数会破坏函数纯度并污染并行测试 | 接管代码整理时定义不可变 `BalanceConfig` 默认对象，经 `EngineDeps`/函数参数注入；模拟器参数扫描复制配置，不修改模块全局 |
+| C-13 | 代码 6.2 | DayRecord 接口 9 个 optional 字段，没有工作日/周末子类型区分 | 改为 `WorkDayRecord | WeekendRecord` 判别联合；Result 不生成 DayRecord |
 
 ---
 
@@ -338,7 +354,7 @@ Dont_be_late/
 ### 交接前工作流建议（给下一位开发者）
 
 1. **第 0 天**：读 `game_spec.md`（数值与机制权威）→ 读 `kanban.md` 本章「遗留问题清单」和「阶段 1-3 详细设计」→ 理解 `src/engine/index.ts` 是唯一对外出口
-2. **先修 🔴 高 5 条**（C-1~C-5）：尤其是 C-1（范围断言）和 C-3（写 engine/shop 骨架 stub）—— 有断言保护后，写任何代码都不容易静默错；骨架文件存在后，新开发者不会被 barrel 注释误导
-3. **再写阶段 1-3**（shop.ts + engine.ts reducer）：按 §10.2 / §10.3 伪代码落地，过程中自然修掉 C-9/C-10/C-11（都是顺手改）
-4. **跑阶段 1-4 模拟器**（simulator.ts）：1 万局统计通关率，用 balance 参数调难度
-5. **最后写阶段 1-5 单测**：snooze 不跳号、commute cap 生效、dayIndex 断言抛错等，参数化测试覆盖
+2. **先做已获批的接管代码整理**：C-1/C-2/C-4 输入断言、C-5 phase 类型、Day12/Result 类型回改、BalanceConfig 注入
+3. **先为当前五个函数补回归测试**：锁定现有正确数值和已确认的边界行为
+4. 获得新的开发批准后，再写阶段 1-3（shop.ts + engine.ts reducer），同步处理 C-9/C-10/C-11
+5. 跑阶段 1-4 模拟器，再根据已确认的平衡目标调参
