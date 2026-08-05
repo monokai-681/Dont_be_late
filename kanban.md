@@ -118,7 +118,7 @@
 
 **文件**：
 - `src/engine/shop.ts`
-  - `applyPendingArrivals(state: GameState): GameState` — §10.3：把 pendingArrivals 里的 pillow/eyeMask/earPlugs/smartLamp 置 true 进 inventory，dora 颗数累加进 inventory，pending 对应字段清空
+  - `applyPendingArrivals(state: GameState): GameState` — §10.3：把 pendingArrivals 里的 pillow/eyeMask/earPlugs/smartLamp 置 true 进 inventory，pending 对应字段清空（⚠️ C-6 决策：DORA 永远当晚进 inventory，不在 pendingArrivals 队列里）
   - `onBuyItem(state: GameState, itemId: string, qty?: number): GameState` — DORA 当晚进 `inventory.dora`（扣钱 × qty）；其余 4 种进 `pendingArrivals`（扣钱，次日到货）。价格从 `config/balance.ts` 读
 - `src/engine/engine.ts`
   - 导出 `INITIAL_STATE: GameState`（对齐 game_spec §10.1，balance=50, debt=0, bribeUsed=false, 全空 inventory）
@@ -295,6 +295,8 @@ Dont_be_late/
 - [x] 🟡 §2.2 机制常量锚点表缺少 `MAX_COMMUTE_BONUS = 25` 行 —— 已补
 - [x] 🟡 §2.3 `TOTAL_DAYS=13` 与 Day13 结算日定义边界不清 —— 已加说明：Day13 是展示层编号，不进 TOTAL_DAYS
 - [x] 🟡 types.ts 中 dayIndex 范围 0~12（你新决策是 0~13，Day13 结算日）—— 已修正，DayRecord.day 范围同步扩大到 1~13
+- [x] 🔴 C-6 PendingArrivals.dora 文档&接口矛盾（C-6 决策 X：不支持 DORA 次日到货）—— 从 types.ts PendingArrivals 接口删除 dora 字段；game_spec §6 PendingArrivals / §10.3 applyPendingArrivals 模板同步删除 dora 行；注释明确 DORA 永远当晚进 inventory
+- [x] 🔴 C-7 SOL_BASE 锚点 vs SOL_BASE_MINUTES 双份并行（C-7 决策 A：锚点权威 + 覆盖层）—— balance.ts SOL_BASE_MINUTES 改名 SOL_BASE_OVERRIDE（number\|null，null=用锚点 SOL_BASE=45）；sol.ts 改为 `SOL_BASE_OVERRIDE ?? SOL_BASE`；resetBalanceToDefaults 里 SOL_BASE_OVERRIDE=null 重置
 
 ---
 
@@ -307,8 +309,6 @@ Dont_be_late/
 | C-3 | 代码 1.1 | 阶段 1-3 关键文件缺失（实现空洞） | `INITIAL_STATE` / `reducer` / `applyPendingArrivals` / `onBuyItem` 在 barrel 里注释占位，但 `engine.ts` / `shop.ts` 文件根本不存在。CLI/UI 会编译失败。game_spec §10 已经给了实现模板 | 交接前至少写一个**骨架 stub**（函数存在，抛 `NotImplementedError`），并在 kanban 1-3 子任务里给每个函数贴上对应的 game_spec 章节号 + 伪代码链接，让新开发者「不用先找规范」 |
 | C-4 | 代码 4.4 | `rngInt(min, max)` 对 `min > max`（调用方传反）无断言 | 结果悄悄落在错误区间不抛错 —— 属于最难调试的「静默数值偏差」 | 入口加 2 行断言：<br>`if (min > max) throw new Error('rngInt: min>max')`<br>`if (!Number.isInteger(min)\|\|!Number.isInteger(max)) throw 'integer required'` |
 | C-5 | 代码 6.2 | GameState 15 个 runtime optional 字段无「阶段→非空」契约 | reducer 读取 `state.arriveMin` 时如果忘记初始化，会得到 undefined → `undefined + 25 = NaN` 链式污染全局 | 二选一：<br>**方案 A（推荐）**：交接文档里单独列一张「15 个 runtime 字段的写入阶段表」，并在 reducer 读取前统一用 `assertPresent(state, 'arriveMin')` 抛错<br>**方案 B（大改，可延后）**：把 GameState 拆成判别联合 `type GameState = { phase: 'bedtime'; ... bedtimeFields } \| { phase: 'commute'; ... }`，用类型系统保证非空 |
-| C-6 | 代码 6.3 | `PendingArrivals.dora` 字段注释与 game_spec 模板矛盾 | types.ts 注释写「虽然现在 DORA 不 pending 但保持对称」；game_spec §10.3 `applyPendingArrivals` 里又有 `if (p.dora>0)` 处理逻辑。新开发者不知道听谁的 | **必须二选一写进规范**（交接前统一）：<br>**X（推荐）**：不支持 DORA 次日到货 → 从 PendingArrivals 接口和 game_spec §10.3 代码里删掉 dora 行<br>**Y**：支持 DORA 囤货次日到货 → 删掉 types.ts 注释「不 pending」，补全「什么路径会进 pending dora」的触发条件说明 |
-| C-7 | 代码 2.1 | SOL_BASE 锚点 vs SOL_BASE_MINUTES 调参两套并存，文档指前者，实际用后者 | 模拟器扫 SOL_BASE_MINUTES 后，外部 UI 层如果 `assert(state.sol === SOL_BASE)` 会假失败，三套（文档/锚点/实际运行值）不同步 | 二选一（交接前定）：<br>**方案 A（推荐）**：sol.ts 改为 `SOL_BASE_OVERRIDE ?? SOL_BASE`，锚点是权威，balance 只在扫描时覆盖<br>**方案 B**：barrel 删除 SOL_BASE 公开导出，game_spec §2.2 所有公式里 SOL_BASE 改名 SOL_BASE_MINUTES |
 
 ---
 
@@ -338,7 +338,7 @@ Dont_be_late/
 ### 交接前工作流建议（给下一位开发者）
 
 1. **第 0 天**：读 `game_spec.md`（数值与机制权威）→ 读 `kanban.md` 本章「遗留问题清单」和「阶段 1-3 详细设计」→ 理解 `src/engine/index.ts` 是唯一对外出口
-2. **先修 🔴 高 7 条**（C-1~C-7）：尤其是 C-1（范围断言）和 C-3（写 engine/shop 骨架 stub）—— 有断言保护后，写任何代码都不容易静默错；骨架文件存在后，新开发者不会被 barrel 注释误导
+2. **先修 🔴 高 5 条**（C-1~C-5）：尤其是 C-1（范围断言）和 C-3（写 engine/shop 骨架 stub）—— 有断言保护后，写任何代码都不容易静默错；骨架文件存在后，新开发者不会被 barrel 注释误导
 3. **再写阶段 1-3**（shop.ts + engine.ts reducer）：按 §10.2 / §10.3 伪代码落地，过程中自然修掉 C-9/C-10/C-11（都是顺手改）
 4. **跑阶段 1-4 模拟器**（simulator.ts）：1 万局统计通关率，用 balance 参数调难度
 5. **最后写阶段 1-5 单测**：snooze 不跳号、commute cap 生效、dayIndex 断言抛错等，参数化测试覆盖

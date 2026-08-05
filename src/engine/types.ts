@@ -45,13 +45,12 @@ export interface Inventory {
   dora: number;        // DORA 剩余颗数（消耗品，每颗 SOL -15）
 }
 
-/** 次日到货清单（DORA 除外，DORA 当晚进 inventory） */
+/** 次日到货清单（仅 4 种永久道具：枕头/眼罩/耳塞/台灯；DORA 当晚进 inventory，从不在此队列） */
 export interface PendingArrivals {
   pillow: boolean;
   eyeMask: boolean;
   earPlugs: boolean;
   smartLamp: boolean;
-  dora: number;        // 预留：虽然现在 DORA 不 pending，但字段保持结构对称
 }
 
 // ── Action 类型（reducer 输入）───────────────────────────────────

@@ -10,7 +10,9 @@
  */
 
 // ── SOL / SNOOZE 调参 ─────────────────────────────────────────
-export let SOL_BASE_MINUTES         = 45;   // SOL 基础值（锚点常量 SOL_BASE 的默认值镜像；调难度改这里）
+export let SOL_BASE_OVERRIDE: number | null = null;
+//   null = 使用 constants.ts 锚点 SOL_BASE 默认值 45
+//   number = 用该数值直接覆盖锚点（提供给模拟器参数扫描用）
 export let SOL_PILLOW_REDUCTION     = -6;   // 枕头削减 SOL（负数）
 export let SOL_EYE_MASK_REDUCTION   = -4;   // 眼罩削减 SOL
 export let SOL_EAR_PLUGS_REDUCTION  = -3;   // 耳塞削减 SOL
@@ -56,7 +58,7 @@ export let SHOP_PRICE_SMART_LAMP    = 95;   // 智能台灯（次日晚到货，
 
 // ── 辅助：参数扫描工具用的 reset ────────────────────────────────
 export function resetBalanceToDefaults(): void {
-  SOL_BASE_MINUTES = 45;
+  SOL_BASE_OVERRIDE = null;
   SOL_PILLOW_REDUCTION = -6; SOL_EYE_MASK_REDUCTION = -4; SOL_EAR_PLUGS_REDUCTION = -3; SOL_DORA_REDUCTION = -15;
   COMMUTE_SUBWAY_MIN = 40; COMMUTE_SUBWAY_COST = 5;
   COMMUTE_EXPRESS_MIN = 25; COMMUTE_EXPRESS_COST = 30; COMMUTE_EXPRESS_CANCEL_RATE = 0.30; COMMUTE_EXPRESS_CANCEL_EXTRA_MIN = 10;

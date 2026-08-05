@@ -3,16 +3,19 @@
  * ---------------------------------------------------------------
  * 对齐 game_spec §4.2
  *
- * 基础 = SOL_BASE_MINUTES（默认 45 分钟）
+ * 基础值（C-7 方案 A：锚点权威 + 覆盖层）：
+ *   若 SOL_BASE_OVERRIDE !== null → 用覆盖层（提供给模拟器参数扫描时临时覆盖）
+ *   若 SOL_BASE_OVERRIDE === null → 用 constants.ts 硬锚点 SOL_BASE = 45
+ *
  * 削减（负数相加）：枕头 -6 / 眼罩 -4 / 耳塞 -3 / DORA -15
  * 下限：SOL_MIN（10 分钟）
  * ---------------------------------------------------------------
  */
 
 import type { Inventory } from './types';
-import { SOL_MIN } from './constants';
+import { SOL_MIN, SOL_BASE } from './constants';
 import {
-  SOL_BASE_MINUTES,
+  SOL_BASE_OVERRIDE,
   SOL_PILLOW_REDUCTION,
   SOL_EYE_MASK_REDUCTION,
   SOL_EAR_PLUGS_REDUCTION,
@@ -26,7 +29,9 @@ import {
  * @returns 最终 SOL 分钟数（≥ SOL_MIN）
  */
 export function calculateSOL(inventory: Inventory, doraUsedTonight: boolean): number {
-  let sol = SOL_BASE_MINUTES;
+  // C-7 方案 A：锚点 SOL_BASE 权威，balance 覆盖层仅在非 null 时生效
+  const base = SOL_BASE_OVERRIDE ?? SOL_BASE;
+  let sol = base;
 
   // 可重复永久道具：次日晚到货的已在 inventory 里置 true
   if (inventory.pillow)   sol += SOL_PILLOW_REDUCTION;    // -6

@@ -39,7 +39,7 @@
 
 | 常量名 | 值 | 说明 |
 |-------|-----|------|
-| `SOL_BASE` | `45`（分钟）| 无任何助眠物品时的入睡等待时间（Sleep Onset Latency）。硬锚点默认值；实际调参改 `balance.ts SOL_BASE_MINUTES`（两者保持一致）|
+| `SOL_BASE` | `45`（分钟）| 无任何助眠物品时的入睡等待时间（Sleep Onset Latency）。**硬锚点权威值**；参数扫描/调难度时临时覆盖 `balance.ts SOL_BASE_OVERRIDE`（null=用锚点；数字=覆盖） |
 | `SOL_MIN` | `10`（分钟）| SOL 下限：买了所有道具也不能低于 10 分钟（不可能合眼秒睡）|
 | `ROUTINE_BASE` | `25`（分钟）| 早晨基础流程时间：起床→出门所需固定耗时（洗漱/穿衣/拿包），不含 snooze |
 | `SNOOZE_PER` | `9`（分钟）| 每一次 snooze（赖床）增加的早晨流程时间 |
@@ -430,7 +430,7 @@ interface PendingArrivals {
   eyeMask: boolean;
   earPlugs: boolean;
   smartLamp: boolean;
-  dora: number;
+  // ⚠️ 2026-08-05 C-6 决策：不支持 DORA 次日到货（简化机制）。DORA 永远当晚进 inventory.dora，不在 pendingArrivals 队列里。
 }
 
 interface GameState {
@@ -668,7 +668,7 @@ function applyPendingArrivals(state: GameState): void {
   if (p.eyeMask)   { state.inventory.eyeMask = true;   p.eyeMask = false; }
   if (p.earPlugs)  { state.inventory.earPlugs = true;  p.earPlugs = false; }
   if (p.smartLamp) { state.inventory.smartLamp = true; p.smartLamp = false; }
-  if (p.dora > 0)  { state.inventory.dora += p.dora;   p.dora = 0; }
+  // ⚠️ C-6 决策：DORA 不进 pendingArrivals，买了当晚立刻进 inventory.dora，无此处理分支
 }
 
 // 玩家在睡前 Screen 购买物品时调用（DORA 当晚进 inventory，其他进 pendingArrivals）
