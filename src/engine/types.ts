@@ -55,6 +55,7 @@ export interface WorkDayRecord extends DayRecordBase {
   sleepHHMM: string;
   snoozeCount: number;
   commute?: string;
+  commuteCancelled?: boolean;
   arriveHHMM?: string;
   isLate?: boolean;
 }

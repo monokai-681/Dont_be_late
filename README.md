@@ -10,9 +10,10 @@
 - Phase 1-1（TypeScript 基础设施）已完成。
 - Phase 1-2（SOL、snooze、通勤、天气、事件五个基础函数）已完成。
 - Phase 1-3（shop + reducer 状态机）已完成。
-- 基础函数、商店和完整引擎回归测试已实现；模拟器、CLI 和 Web UI 尚未实现。
+- Phase 1-4（固定 / 普通自适应 / 安全参考三策略模拟器）已完成。
+- 基础函数、商店、完整引擎和模拟器回归测试已实现；CLI 和 Web UI 尚未实现。
 
-当前引擎已经可以从 Day 1 完整运行到 Day 12，并通过 TypeScript 编译和整局回归测试；`sim` 和 `cli` 脚本要等对应阶段完成后才能正常运行。
+当前引擎已经可以从 Day 1 完整运行到 Day 12，并通过 TypeScript 编译和整局回归测试。模拟器已验证 D-8 首轮参数仍允许“07:00＋固定地铁”100% 通关，因此下一步不是直接调参，而是先确认 D-8 二次方案与 D-10 目标口径。
 
 ## 当前核心规则摘要
 
@@ -54,13 +55,13 @@ intro → bedtime → sleeping → wakeup → commute → office/bribe → next 
 npm install
 npm run build
 npm test
+npm run sim -- 1000
+npm run sim:10k
 ```
 
 预置但尚未具备实现文件的命令：
 
 ```bash
-npm run sim
-npm run sim:10k
 npm run cli
 ```
 
@@ -68,4 +69,4 @@ Node.js 要求：20 或更高版本。
 
 ## 当前开发状态
 
-takeover 阶段已于 2026-08-06 结束，Phase 1-3 核心状态机已经完成；下一步实现多策略模拟器并为 D-9/D-10 生成数据。
+takeover 阶段已于 2026-08-06 结束，Phase 1-4 多策略模拟器已经完成。默认 seed `20260807` 的 10,000 局首轮基线显示固定、普通自适应与安全参考策略均为 100% 通关；这证明 D-8 首轮实验没有消除无脑通关，D-9 当前为 0% 纯 RNG 失败但尚不足以说明体验合理。下一步先决定 D-8 二次方案和 D-10 正式通关率口径，再进入参数扫描。
