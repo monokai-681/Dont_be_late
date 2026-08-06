@@ -1,9 +1,9 @@
 # 《别迟到》游戏数值规格文档 (Game Spec)
 
-> **版本**: v1.3
+> **版本**: v1.4
 > **生成日期**: 2026-08-03
 > **最后更新**: 2026-08-06
-> **状态**: takeover 已结束；早期原型开发进行中，D-8 首轮实验参数已落实到代码与测试
+> **状态**: takeover 已结束；Phase 1-3 核心引擎已实现，下一步进入模拟器
 
 ---
 
@@ -417,15 +417,15 @@ Day 0 开局：
 
 ### 5.3 经济参数
 
-| 项目 | 值 | 说明 |
-|------|-----|------|
-| 初始余额 | 50 元 | Day 0 开局给 |
-| 日工资 | 20 元/天 | Day 1~Day 12 每晚睡前发，共 12 次（周末也发，最后一天也发）|
-| 总资金上限 | 50 + 12×20 = **290 元** | 玩家理论上最多能花的钱 |
-| 贿赂金额 | **180 元** | 只能用一次，抹去一次迟到记录 |
-| 贿赂可用次数 | 1 次 | 用过后第二次迟到直接 Game Over |
-| 全勤奖 | 取消 | 方案 A，通关无额外奖励 |
-| 结算到手金额 | = `balance`（最终余额）| 通关或失败都只看最终余额 |
+| 项目 | 代码配置名 | 值 | 说明 |
+|------|-----------|-----|------|
+| 初始余额 | `INITIAL_BALANCE` | 50 元 | Day 0 开局给 |
+| 日工资 | `DAILY_SALARY` | 20 元/天 | Day 1~12 每晚睡前发，共 12 次（周末也发，最后一天也发）|
+| 总资金上限 | — | 50 + 12×20 = **290 元** | 玩家理论上最多能花的钱 |
+| 贿赂金额 | `BRIBE_COST` | **180 元** | 只能用一次，抹去一次迟到记录 |
+| 贿赂可用次数 | — | 1 次 | 用过后第二次迟到直接 Game Over |
+| 全勤奖 | — | 取消 | 方案 A，通关无额外奖励 |
+| 结算到手金额 | — | = `balance`（最终余额）| 通关或失败都只看最终余额 |
 
 **余额硬规则（2026-08-05 确认）**：`balance` 始终大于或等于 0。买不起某个商品或通勤方式时，该选项不可用；这本身不判负。只有连最便宜的 5 元地铁也买不起时才以 `CANNOT_AFFORD_COMMUTE` 失败。迟到后余额不足 180 元则以 `CANNOT_AFFORD_BRIBE` 失败。
 
@@ -520,21 +520,45 @@ type GamePhase =
   | 'bribe'
   | 'result';
 
-> 上面的 `GameState` 是领域字段总览。真实 TypeScript 实现必须使用以 `phase` 为判别字段的联合类型，把各阶段必需字段设为必填，不能继续依赖大量 optional 字段和 UI 调用顺序维持合法性。
+> 上面的 `GameState` 是领域字段总览。真实 TypeScript 已使用以 `phase` 为判别字段的联合类型，把各阶段必需字段设为必填，不依赖 UI 调用顺序维持合法性。
 
-interface DayRecord {
-  day: number;                  // 1 ~ 12；Result 不生成 DayRecord
-  isWorkDay: boolean;
-  alarmHHMM?: string;
-  sleepHHMM?: string;
-  sleepDebtAfter?: number;
-  snoozeCount?: number;
+interface WorkDayRecord {
+  day: number;
+  isWorkDay: true;
+  alarmHHMM: string;
+  sleepHHMM: string;
+  sleepDebtAfter: number;
+  snoozeCount: number;
   commute?: string;             // 中文名："地铁" "快车" "专车"
   arriveHHMM?: string;
   isLate?: boolean;
-  balanceAfter?: number;
+  balanceAfter: number;
 }
+
+interface WeekendRecord {
+  day: number;
+  isWorkDay: false;
+  sleepDebtAfter: number;
+  balanceAfter: number;
+}
+
+type DayRecord = WorkDayRecord | WeekendRecord;
 ```
+
+### 6.1 Action 与拒绝语义（2026-08-06 确认）
+
+阶段推进使用明确 Action，不由一次 reducer 调用自动跳过多个 Screen：
+
+```text
+START_GAME → SET_ALARM/BUY_ITEM/USE_DORA_TONIGHT → START_SLEEP
+→ WAKE_UP → CONTINUE_TO_COMMUTE → CHOOSE_COMMUTE
+→ CONTINUE_TO_NEXT_DAY 或 CHOOSE_BRIBE/DECLINE_BRIBE
+```
+
+- `PASS_WEEKEND` 只用于 Day 6/7；周末仍可 `BUY_ITEM`。
+- 跨阶段、重复或乱序 Action 属于调用方程序错误，抛出 `InvalidActionError`。
+- 余额不足、重复购买、无 DORA、闹钟非法等正常玩家限制不抛异常；reducer 返回 `{status:'rejected', state, reason}`，状态保持不变，UI 根据结构化 reason 展示提示。
+- `playing/rejected/win/lose` 是 reducer 的四类结构化结果；只有正式失败进入 `lose`，被拒绝的操作不等同于 Game Over。
 
 ---
 
@@ -689,13 +713,13 @@ const INITIAL_STATE: GameState = {
     eyeMask: false,
     earPlugs: false,
     smartLamp: false,
+    dora: 0,
   },
   pendingArrivals: {
     pillow: false,
     eyeMask: false,
     earPlugs: false,
     smartLamp: false,
-    dora: 0,
   },
   usedEventFlavors: [],            // 普通事件 flavor 去重池，Day0 空，终身不 reset
   dailyLog: [],

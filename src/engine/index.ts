@@ -10,8 +10,10 @@
 export type {
   CommuteId,
   WeatherLogic,
+  NormalEventId,
   EventId,
   LoseReason,
+  ActionRejectedReason,
   CommuteResult,
   Inventory,
   PendingArrivals,
@@ -19,6 +21,18 @@ export type {
   ShopItemId,
   GameResult,
   DayRecord,
+  WorkDayRecord,
+  WeekendRecord,
+  BaseGameState,
+  ActiveGameState,
+  IntroState,
+  BedtimeState,
+  SleepingState,
+  WakeupState,
+  CommuteState,
+  OfficeState,
+  BribeState,
+  ResultState,
   GameState,
   EngineDeps,
 } from './types';
@@ -55,9 +69,9 @@ export {
   FINAL_DAY_INDEX,
 } from './constants';
 
-// ── 平衡参数（允许模拟器扫描时直接修改导出的 let）───────────────
-export * as Balance from './config/balance';
-export { resetBalanceToDefaults } from './config/balance';
+// ── 平衡参数（不可变默认对象；扫描时复制并通过参数注入）──────────
+export { DEFAULT_BALANCE_CONFIG } from './config/balance';
+export type { BalanceConfig } from './config/balance';
 
 // ── 核心函数 ────────────────────────────────────────────────────
 export { calculateSOL }                             from './sol';
@@ -66,8 +80,14 @@ export { calculateCommute }                         from './commute';
 export { rollWeather }                              from './weather';
 export { rollEvent }                                from './events';
 export type { RollEventResult }                     from './events';
-// export { applyPendingArrivals, onBuyItem } from './shop';  // 阶段 1-3
+export { applyPendingArrivals, onBuyItem }           from './shop';
+export type { ShopPurchaseResult }                   from './shop';
 
 // ── 状态机 ──────────────────────────────────────────────────────
-// export { INITIAL_STATE }       from './engine';
-// export { reducer }             from './engine';
+export {
+  INITIAL_STATE,
+  InvalidActionError,
+  calculateArrivalMinutes,
+  createInitialState,
+  reducer,
+} from './engine';

@@ -15,13 +15,7 @@ import type { CommuteId, CommuteResult } from './types';
 import type { Rng } from './random';
 import { MAX_COMMUTE_BONUS } from './constants';
 import { assertBoolean, assertIntegerInRange, assertNever, assertOneOf } from './validation';
-import {
-  COMMUTE_SUBWAY_MIN,   COMMUTE_SUBWAY_COST,
-  COMMUTE_EXPRESS_MIN,  COMMUTE_EXPRESS_COST,  COMMUTE_EXPRESS_CANCEL_RATE,  COMMUTE_EXPRESS_CANCEL_EXTRA_MIN,
-  COMMUTE_PREMIUM_MIN,  COMMUTE_PREMIUM_COST,
-  WEATHER_SNOW_BONUS_MIN,
-  EVENT_HOLIDAY_BONUS_MIN,
-} from './config/balance';
+import { DEFAULT_BALANCE_CONFIG, type BalanceConfig } from './config/balance';
 
 const COMMUTE_IDS: readonly CommuteId[] = ['subway', 'express', 'premium'];
 
@@ -38,13 +32,14 @@ export function calculateCommute(
   isSnow: boolean,
   eventBonus: number,
   rng: Rng,
+  config: BalanceConfig = DEFAULT_BALANCE_CONFIG,
 ): CommuteResult {
   assertOneOf(choice, COMMUTE_IDS, 'calculateCommute:choice');
   assertBoolean(isSnow, 'calculateCommute:isSnow');
   assertIntegerInRange(
     eventBonus,
     0,
-    EVENT_HOLIDAY_BONUS_MIN,
+    config.EVENT_HOLIDAY_BONUS_MIN,
     'calculateCommute:eventBonus',
   );
 
@@ -56,20 +51,20 @@ export function calculateCommute(
 
   switch (choice) {
     case 'subway':
-      baseMin  = COMMUTE_SUBWAY_MIN;   // 60
-      baseCost = COMMUTE_SUBWAY_COST;  // 5
+      baseMin  = config.COMMUTE_SUBWAY_MIN;
+      baseCost = config.COMMUTE_SUBWAY_COST;
       cancelRate = 0;
       immune = true;
       break;
     case 'express':
-      baseMin  = COMMUTE_EXPRESS_MIN;  // 25
-      baseCost = COMMUTE_EXPRESS_COST; // 30
-      cancelRate = COMMUTE_EXPRESS_CANCEL_RATE; // 0.30
+      baseMin  = config.COMMUTE_EXPRESS_MIN;
+      baseCost = config.COMMUTE_EXPRESS_COST;
+      cancelRate = config.COMMUTE_EXPRESS_CANCEL_RATE;
       immune = false;
       break;
     case 'premium':
-      baseMin  = COMMUTE_PREMIUM_MIN;  // 25
-      baseCost = COMMUTE_PREMIUM_COST; // 60
+      baseMin  = config.COMMUTE_PREMIUM_MIN;
+      baseCost = config.COMMUTE_PREMIUM_COST;
       cancelRate = 0;                  // 专车从不取消
       immune = false;
       break;
@@ -80,14 +75,14 @@ export function calculateCommute(
   // Step 1: 天气 + 事件加时（仅非免疫交通）— 叠加后有硬上限（MAX_COMMUTE_BONUS=25，2026-08-05 机制简化）
   let bonusMin = 0;
   if (!immune) {
-    if (isSnow) bonusMin += WEATHER_SNOW_BONUS_MIN; // 下雪 +15
+    if (isSnow) bonusMin += config.WEATHER_SNOW_BONUS_MIN;
     bonusMin += eventBonus;                          // 事件 +15/+20 或 0
     bonusMin = Math.max(0, Math.min(bonusMin, MAX_COMMUTE_BONUS)); // ⚠️ 双灾叠加硬上限 25 分钟
   }
 
   // Step 2: 快车取消 roll（只 roll 一次！取消最多 0 或 1 次，第二次必成功）
   const cancelled = choice === 'express' && rng() < cancelRate;
-  const cancelMin = cancelled ? COMMUTE_EXPRESS_CANCEL_EXTRA_MIN : 0; // 取消 +10
+  const cancelMin = cancelled ? config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN : 0;
 
   // Step 3: 汇总
   return {

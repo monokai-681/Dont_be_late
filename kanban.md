@@ -11,7 +11,7 @@
 | 阶段 | 名称 | 状态 | 关键产出 |
 |------|------|------|---------|
 | 0 | 设计文档 & 数值拍板 & 方案确认 | ✅ 完成 | game_spec v1.1 + 4 阶段流程 + 7 优化点 + 目录结构约定 |
-| 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3⏳） | 基础设施+5核心函数已交付并完成基础加固；待做 shop/reducer + 模拟器 + 整局测试 |
+| 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3✅ 1-4⏳ 1-5✅） | 完整 reducer、商店和 112 项测试已交付；待做多策略模拟器 |
 | 2 | 命令行可交互版 | ⏳ 待开始 | `src/cli.ts`，终端手动玩一局 |
 | 3 | Web UI | ⏳ 待开始 | 响应式网页：Intro + 5 个工作日 Screen + Result，共 7 个逻辑 Screen |
 | 4 | 平衡调优 + 文案 | ⏳ 待开始 | 10 万局模拟；通关率口径待 D-10 确认；P1 TODO 全清 |
@@ -62,10 +62,10 @@
 ### 阶段 1-1：基础设施（2026-08-03 · commit c82ecbd）
 
 - [x] 工程脚手架：`package.json`（5 scripts + 6 devDeps）、`tsconfig.json`（strict ES2020）、`jest.config.js`（30s 超时）、`.gitignore`
-- [x] 常量分层：`constants.ts` 23 个硬锚点 UPPER_SNAKE + `config/balance.ts` 全部平衡参数 `let` 化 + `resetBalanceToDefaults()` 便于扫描
+- [x] 常量分层：`constants.ts` 硬锚点 + 不可变 `DEFAULT_BALANCE_CONFIG`；参数扫描复制配置后显式注入
 - [x] RNG 可复现：`random.ts` mulberry32 算法 + `createRngFromString`（FNV-1a）+ `rngInt` / `rngPickIndex` 工具
-- [x] 类型系统：`types.ts` 全套接口 — GameState（含 `usedEventFlavors`）/ Action 判别联合 / GameResult（playing|win|lose + 4 种 LoseReason 分型）/ DayRecord / EngineDeps / CommuteResult 等
-- [x] 唯一出口：`index.ts` barrel export（CLI/UI 禁止直接 import 内部路径），已导出 constants / Balance 命名空间 / types / RNG / 5 核心函数
+- [x] 类型系统：`GameState` phase 判别联合、显式 Action、`GameResult`（playing/rejected/win/lose）、工作日/周末 DayRecord 联合
+- [x] 唯一出口：`index.ts` barrel export（CLI/UI 禁止直接 import 内部路径），已导出 constants / 默认 BalanceConfig / types / RNG / 核心函数 / shop / reducer
 - [x] `tsc --noEmit` strict 模式 0 错误；Node 26 / npm 11 环境确认无需升级（已满足 engines >=20）
 
 ---
@@ -74,7 +74,7 @@
 
 - [x] `calculateSOL()`：base -6/-4/-3 永久道具 + -15 DORA 消耗品，下限 SOL_MIN 10，纯函数无 rng
 - [x] `rollSnoozeCount()`：D-8 已将 `SNOOZE_MAX` 落实为 6；回归测试覆盖上限、相邻结果集合、台灯期望比例和 09:00 策略边界
-- [x] `calculateCommute()`：D-8 已将地铁落实为 60m/5¥、保持免疫和 0% 风险；回归测试覆盖全部天气/事件组合及 reset 默认值
+- [x] `calculateCommute()`：D-8 已将地铁落实为 60m/5¥、保持免疫和 0% 风险；回归测试覆盖全部天气/事件组合及不可变默认配置
 - [x] `rollWeather(dayIndex, rng)`：Day1 强制 clear，Day12 70% snow，普通工作日 Day2/3/4/5/8/9/10/11 下雪率 20%（与城市事件 roll 完全独立，2026-08-05 机制简化移除了 hasEventToday 参数和 Day4/5 有事件叠加雪的分支）
 - [x] `rollEvent(dayIndex, usedFlavors, rng)` → `{eventId, bonusMin, newlyUsedFlavor?}`：Day12 固定 holidayRush +20，Day4/5 各 50% 从 3 flavor 池**不重复抽取**+15，其余 null +0
 - [x] 冒烟分布验证（10k 样本）：Day12 雪 70.5% / 普通 19.9% / 快车取消 30.2% / Day4-5 触发 50.1%，全部落在 ±1% 区间
@@ -101,6 +101,20 @@
 
 ---
 
+### 阶段 1-3 状态机与商店（2026-08-06）
+
+- [x] C-5：`GameState` 改为 `phase` 判别联合，各阶段必需字段由 TypeScript 保证
+- [x] 显式阶段 Action：`START_GAME / START_SLEEP / WAKE_UP / CONTINUE_TO_COMMUTE / CONTINUE_TO_NEXT_DAY` 等
+- [x] 操作语义：跨阶段调用抛 `InvalidActionError`；玩家限制返回 typed `rejected` 且不改状态
+- [x] `shop.ts`：永久物品次日到货、DORA 当晚入库、重复/数量/余额边界、immutable update
+- [x] `engine.ts`：工资与到货一次性处理、睡债时序、周末、通勤、迟到、贿赂、四种失败、Day12 通关
+- [x] C-12：全局可变参数改为冻结的 `DEFAULT_BALANCE_CONFIG` + 显式注入，扫描配置互不污染
+- [x] C-13：`DayRecord` 改为 `WorkDayRecord | WeekendRecord`；Result 不生成日志项
+- [x] C-8：删除未使用的 `EngineDeps.now`
+- [x] 8 个测试套件、112 项测试通过；包含 Day1→Day12 整局通关、周末、贿赂、余额和非法 Action
+
+---
+
 ### 阶段 1 机制简化（2026-08-05 · MAX_COMMUTE_BONUS=25min 独立 roll）
 
 - [x] 天气/城市事件改为完全独立 roll：移除 rollWeather 的 hasEventToday 参数，删除 Day4/5「有事件则额外 30% 下雪」分支，Day4/5 下雪率与普通工作日一致 20%
@@ -116,7 +130,7 @@
 ### 阶段 1：无 UI 核心引擎
 **目标**：`src/engine/` 纯 TS 模块，`npm run sim 10000` 能输出通关率+失败原因分布报告  
 **核心原则**：纯函数 + 可复现，零 DOM 依赖，可在 Node 里直接跑  
-**进度**：1-1 ✅ / 1-2 ✅ / 1-3 ⏳ / 1-4 ⏳ / 1-5 🔄（D-8 回归测试已完成，其余测试随对应模块补齐）
+**进度**：1-1 ✅ / 1-2 ✅ / 1-3 ✅ / 1-4 ⏳ / 1-5 ✅
 
 ---
 
@@ -140,15 +154,17 @@
 
 #### 1-3 状态机（reducer）& shop
 
+**✅ 已完成，见上方「阶段 1-3 状态机与商店」**
+
 **文件**：
 - `src/engine/shop.ts`
-  - `applyPendingArrivals(state: GameState): GameState` — §10.3：把 pendingArrivals 里的 pillow/eyeMask/earPlugs/smartLamp 置 true 进 inventory，pending 对应字段清空（⚠️ C-6 决策：DORA 永远当晚进 inventory，不在 pendingArrivals 队列里）
-  - `onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameState` — DORA 当晚进 `inventory.dora`；其余 4 种进 `pendingArrivals`。执行余额非负、永久物品不可重复购买、DORA qty 正整数等规则
+  - `applyPendingArrivals()` — 把 pending 的四种永久物品合并进 inventory 并清空队列；DORA 永远不进 pending
+  - `onBuyItem()` — DORA 当晚进库存，其余次日到货；返回 accepted 或 typed rejection，始终 immutable
 - `src/engine/engine.ts`
-  - 导出 `INITIAL_STATE: GameState`（`phase='intro'`，dayIndex=0，balance=50，debt=0，bribeUsed=false，全空 inventory）
-  - 导出核心：`reducer(state: GameState, action: Action, deps: {rng: Rng}): GameResult`
-  - `GameState` 改为以 `phase` 判别的联合：`intro → bedtime → sleeping → wakeup → commute → office/bribe → result`
-  - reducer 必须依据 `phase` 限制合法 Action；任何跨阶段、重复或乱序 Action 都拒绝，不依赖 UI 自律
+  - 导出 `INITIAL_STATE` / `createInitialState()` / `reducer()` / `calculateArrivalMinutes()`
+  - `GameState` 是以 `phase` 判别的联合：`intro → bedtime → sleeping → wakeup → commute → office/bribe → result`
+  - 显式 Action 推进每个 Screen；跨阶段、重复或乱序 Action 抛 `InvalidActionError`
+  - 正常玩家限制返回 `{status:'rejected', state, reason}`，不修改状态
   - 进入 Day 的原子流程：发当日工资一次、合并到货一次、独立 roll 天气与事件一次、保存 `weatherToday/eventToday/eventBonusMin`，然后进入 `bedtime`
   - `SET_ALARM(min)`：仅 `bedtime` 工作日合法，校验 420~600 且能被 5 整除
   - `BUY_ITEM(id, qty)`：仅 `bedtime` 合法；余额不足或违反商店边界时拒绝操作，不改变状态
@@ -206,7 +222,8 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
 - [x] `src/tests/weather.test.ts` — Day1、Day12、普通工作日、周末和 dayIndex 边界
 - [x] `src/tests/events.test.ts` — Day4/5、Day12、非事件日、不重复 flavor 和 dayIndex 边界
 - [x] `src/tests/random.test.ts` — seed 可复现、整数端点、非法范围和空数组
-- [ ] `src/tests/engine.test.ts` — 待 reducer 完成后实现整局变体测试：
+- [x] `src/tests/shop.test.ts` — 到货、DORA、重复购买、数量、余额和配置注入
+- [x] `src/tests/engine.test.ts` — 整局变体测试：
   1. Day1 教学关无雪无事件 + 闹钟 7:00 + 地铁 → 100% 不迟到，顺利进入 Day2
   2. 周末 Day6 PASS_WEEKEND：sleepDebt=100 → Day6 后=50 → Day7 后=25；newDebt 始终不增加
   3. 贿赂流程：第一次迟到后选贿赂 → balance-180、bribeUsed=true、day 正常推进；第二次迟到后无论如何都是 lose SECOND_LATE
@@ -330,44 +347,20 @@ Dont_be_late/
 - [x] 🟡 §2.2 机制常量锚点表缺少 `MAX_COMMUTE_BONUS = 25` 行 —— 已补
 - [x] 🟡 Day13 边界 —— takeover 最终决策：Day 只到 12；Result 是 `GameResult/result phase`，不占 Day 编号、不写 `dailyLog`；types.ts 残留注释已于 2026-08-06 回改
 - [x] 🔴 C-6 PendingArrivals.dora 文档&接口矛盾（C-6 决策 X：不支持 DORA 次日到货）—— 从 types.ts PendingArrivals 接口删除 dora 字段；game_spec §6 PendingArrivals / §10.3 applyPendingArrivals 模板同步删除 dora 行；注释明确 DORA 永远当晚进 inventory
-- [x] 🔴 C-7 SOL_BASE 锚点 vs SOL_BASE_MINUTES 双份并行（C-7 决策 A：锚点权威 + 覆盖层）—— balance.ts SOL_BASE_MINUTES 改名 SOL_BASE_OVERRIDE（number\|null，null=用锚点 SOL_BASE=45）；sol.ts 改为 `SOL_BASE_OVERRIDE ?? SOL_BASE`；resetBalanceToDefaults 里 SOL_BASE_OVERRIDE=null 重置
+- [x] 🔴 C-7 SOL_BASE 锚点 vs SOL_BASE_MINUTES 双份并行（C-7 决策 A：锚点权威 + 覆盖层）—— 使用 `SOL_BASE_OVERRIDE ?? SOL_BASE`；C-12 后续又将覆盖层收敛进不可变 `BalanceConfig`，不再需要全局 reset
 - [x] 🔴 C-1/C-2 公共函数输入边界 —— 已新增统一 runtime guards，拒绝非法 dayIndex、sleepDebt、通勤 ID、天气标记和事件加时
 - [x] 🔴 C-4 `rngInt()` 静默接受错误范围 —— 已拒绝非整数边界和 `min > max`
 - [x] 🟡 C-9/C-10/C-11 基础函数整理 —— 天气复用工作日常量；事件 flavor 使用精确类型并复用 `rngPickIndex()`
-
----
-
-### 🔴 高（对外引擎完成前必须修）
-
-| # | 来源 | 标题 | 一句话风险 | 推荐修复代码 / 规范链接 |
-|---|------|------|------------|-------------------------|
-| C-5 | 代码 6.2 | GameState 15 个 runtime optional 字段无「阶段→非空」契约 | reducer 读取未初始化字段会产生 `undefined/NaN` 链式污染 | **决策已定、代码待整理**：改为带 `phase` 的判别联合，每个阶段只暴露本阶段必需字段；reducer 同时做运行时 phase 校验 |
-
----
-
-### 🟡 中（阶段 1 内建议修）
-
-| # | 来源 | 标题 | 推荐修复 |
-|---|------|------|---------|
-| C-8 | 代码 1.2 | `EngineDeps.now` 预留字段从未被任何地方读取 | 要么直接删除（避免类型膨胀），要么在注释里标 `@deprecated 原型阶段不传` |
-| C-12 | 代码 7.4 | 全局可变 balance 参数会破坏函数纯度并污染并行测试 | 接管代码整理时定义不可变 `BalanceConfig` 默认对象，经 `EngineDeps`/函数参数注入；模拟器参数扫描复制配置，不修改模块全局 |
-| C-13 | 代码 6.2 | DayRecord 接口 9 个 optional 字段，没有工作日/周末子类型区分 | 改为 `WorkDayRecord | WeekendRecord` 判别联合；Result 不生成 DayRecord |
-
----
-
-### 🟢 低（不阻塞交接，开发时顺手修）
-
-| # | 来源 | 标题 | 说明 |
-|---|------|------|------|
-| C-14 | 代码 5.1 | game_spec 伪代码示例用 Math.random 但实际实现已注入 Rng | 本轮已在 §4.3 / §4.5 伪代码顶部加了「⚠️ 算法说明伪代码…真实实现必须注入 Rng」的声明。若还有遗漏在其他章节，搜索 `Math.random` 统一加声明即可 |
-| C-15 | 文档 9 | kanban 1-3 CHOOSE_COMMUTE 流程没写把 `CommuteResult.cancelled` 写回 `state.commuteCancelled` | 本轮已在 kanban §漂移 #9 修复建议处提了一句，等阶段 1-3 写 CHOOSE_COMMUTE 时补上一行即可 |
-| C-16 | 文档 10 | §5.3 经济参数表缺「代码常量名」列（INITIAL_BALANCE/DAILY_SALARY/BRIBE_COST） | 纯文档美化，交接时新开发者搜索「初始余额 50」也能找到 balance.ts，不急 |
+- [x] 🔴 C-5 phase 状态契约 —— 已改为判别联合；跨阶段 Action 抛 `InvalidActionError`
+- [x] 🟡 C-8/C-12/C-13 —— 删除未用 `now`；BalanceConfig 不可变注入；DayRecord 按工作日/周末分型
+- [x] 🟢 C-15 —— `CHOOSE_COMMUTE` 已把 `cancelled` 写回 `state.commuteCancelled`
+- [x] 🟢 C-14/C-16 —— RNG 伪代码均明确禁止 `Math.random`；§5.3 已补经济配置名
 
 ---
 
 ### 阶段 1 后续工作流
 
-1. 设计并实现阶段 1-3（shop.ts + engine.ts reducer）及 C-5 phase 类型
-2. 将全局可变平衡参数收敛为可注入的 `BalanceConfig`，避免模拟器与并行测试互相污染
-3. 完成 `engine.test.ts` 整局测试，覆盖周末、贿赂、余额与非法 Action
-4. 完成阶段 1-4 模拟器，再根据 D-9 验收指标和 D-10 待定口径分析分策略数据
+1. 完成阶段 1-4 多策略模拟器
+2. 输出固定/普通自适应/安全参考策略的通关率、余额、失败原因、死亡日与 RNG 归因
+3. 根据 D-9 验收指标检查安全参考策略纯 RNG 整局失败率是否 <25%
+4. 用分策略数据回到 D-10，决定正式目标通关率区间

@@ -1,8 +1,7 @@
 import {
-  Balance,
+  DEFAULT_BALANCE_CONFIG,
   SOL_MIN,
   calculateSOL,
-  resetBalanceToDefaults,
   type Inventory,
 } from '../engine';
 
@@ -15,14 +14,6 @@ const EMPTY_INVENTORY: Inventory = {
 };
 
 describe('calculateSOL', () => {
-  beforeEach(() => {
-    resetBalanceToDefaults();
-  });
-
-  afterAll(() => {
-    resetBalanceToDefaults();
-  });
-
   test('uses the 45-minute anchor without sleep aids', () => {
     expect(calculateSOL(EMPTY_INVENTORY, false)).toBe(45);
   });
@@ -50,12 +41,12 @@ describe('calculateSOL', () => {
   });
 
   test('supports a temporary base override for parameter scans', () => {
-    Balance.SOL_BASE_OVERRIDE = 30;
-    expect(calculateSOL(EMPTY_INVENTORY, false)).toBe(30);
+    const config = { ...DEFAULT_BALANCE_CONFIG, SOL_BASE_OVERRIDE: 30 };
+    expect(calculateSOL(EMPTY_INVENTORY, false, config)).toBe(30);
   });
 
   test('never falls below SOL_MIN', () => {
-    Balance.SOL_DORA_REDUCTION = -1_000;
-    expect(calculateSOL(EMPTY_INVENTORY, true)).toBe(SOL_MIN);
+    const config = { ...DEFAULT_BALANCE_CONFIG, SOL_DORA_REDUCTION: -1_000 };
+    expect(calculateSOL(EMPTY_INVENTORY, true, config)).toBe(SOL_MIN);
   });
 });

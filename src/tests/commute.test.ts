@@ -1,15 +1,10 @@
 import {
-  Balance,
+  DEFAULT_BALANCE_CONFIG,
   calculateCommute,
   createRng,
-  resetBalanceToDefaults,
 } from '../engine';
 
 describe('D-8 commute balance', () => {
-  beforeEach(() => {
-    resetBalanceToDefaults();
-  });
-
   test.each([
     [false, 0],
     [false, 15],
@@ -44,14 +39,25 @@ describe('D-8 commute balance', () => {
     expect(() => calculateCommute('express', 'yes' as never, 0, () => 0)).toThrow(TypeError);
   });
 
-  test('reset restores the D-8 subway defaults', () => {
-    Balance.COMMUTE_SUBWAY_MIN = 1;
-    Balance.COMMUTE_SUBWAY_COST = 1;
+  test('the immutable default config contains the D-8 subway values', () => {
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_COST).toBe(5);
+    expect(Object.isFrozen(DEFAULT_BALANCE_CONFIG)).toBe(true);
+  });
 
-    resetBalanceToDefaults();
+  test('accepts an isolated config copy without mutating defaults', () => {
+    const config = {
+      ...DEFAULT_BALANCE_CONFIG,
+      COMMUTE_SUBWAY_MIN: 10,
+      COMMUTE_SUBWAY_COST: 1,
+    };
 
-    expect(Balance.COMMUTE_SUBWAY_MIN).toBe(60);
-    expect(Balance.COMMUTE_SUBWAY_COST).toBe(5);
+    expect(calculateCommute('subway', false, 0, () => 0, config)).toEqual({
+      commuteMin: 10,
+      commuteCost: 1,
+      cancelled: false,
+    });
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
   });
 
   test('express cancellation remains a single ten-minute penalty', () => {

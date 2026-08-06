@@ -18,17 +18,11 @@
  * ---------------------------------------------------------------
  */
 
-import type { EventId } from './types';
+import type { EventId, NormalEventId } from './types';
 import { rngPickIndex, type Rng } from './random';
 import { FINAL_DAY_INDEX } from './constants';
 import { assertIntegerInRange } from './validation';
-import {
-  EVENT_NORMAL_TRIGGER_RATE,
-  EVENT_NORMAL_BONUS_MIN,
-  EVENT_HOLIDAY_BONUS_MIN,
-} from './config/balance';
-
-type NormalEventId = Exclude<EventId, null | 'holidayRush'>;
+import { DEFAULT_BALANCE_CONFIG, type BalanceConfig } from './config/balance';
 
 const NORMAL_EVENT_FLAVORS: readonly NormalEventId[] = [
   'concert',
@@ -49,7 +43,7 @@ function pickUnusedFlavor(usedFlavors: readonly string[], rng: Rng): NormalEvent
 export interface RollEventResult {
   eventId: EventId;           // null | 'concert' | 'expo' | 'marathon' | 'holidayRush'
   bonusMin: number;           // 通勤加时：0 / 15 / 20
-  newlyUsedFlavor?: string;   // 如果触发了普通事件，把 flavor 返回，调用方要写进 usedEventFlavors
+  newlyUsedFlavor?: NormalEventId; // 如果触发了普通事件，把 flavor 返回，调用方要写进 usedEventFlavors
 }
 
 /**
@@ -62,21 +56,22 @@ export function rollEvent(
   dayIndex: number,
   usedEventFlavors: readonly string[],
   rng: Rng,
+  config: BalanceConfig = DEFAULT_BALANCE_CONFIG,
 ): RollEventResult {
   assertIntegerInRange(dayIndex, 0, FINAL_DAY_INDEX, 'rollEvent:dayIndex');
 
   // 规则 3：Day12 固定节前出行高峰，独占不 roll 其他
   if (dayIndex === FINAL_DAY_INDEX) {
-    return { eventId: 'holidayRush', bonusMin: EVENT_HOLIDAY_BONUS_MIN };
+    return { eventId: 'holidayRush', bonusMin: config.EVENT_HOLIDAY_BONUS_MIN };
   }
 
   // 规则 1：Day4 和 Day5 各自独立 50% 概率触发普通事件
   if (dayIndex === 4 || dayIndex === 5) {
-    if (rng() < EVENT_NORMAL_TRIGGER_RATE) {
+    if (rng() < config.EVENT_NORMAL_TRIGGER_RATE) {
       const flavor = pickUnusedFlavor(usedEventFlavors, rng);
       return {
         eventId: flavor,
-        bonusMin: EVENT_NORMAL_BONUS_MIN,
+        bonusMin: config.EVENT_NORMAL_BONUS_MIN,
         newlyUsedFlavor: flavor,
       };
     }

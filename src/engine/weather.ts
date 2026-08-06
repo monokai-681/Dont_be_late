@@ -26,10 +26,7 @@ import type { WeatherLogic } from './types';
 import type { Rng } from './random';
 import { FINAL_DAY_INDEX, WORK_DAY_INDICES } from './constants';
 import { assertIntegerInRange } from './validation';
-import {
-  WEATHER_SNOW_RATE_NORMAL_DAY,
-  WEATHER_SNOW_RATE_FINAL_DAY,
-} from './config/balance';
+import { DEFAULT_BALANCE_CONFIG, type BalanceConfig } from './config/balance';
 
 /**
  * 根据 Day 编号 roll 今日天气逻辑层。
@@ -37,7 +34,11 @@ import {
  * @param dayIndex  当前 dayIndex（0~12）
  * @param rng       可复现随机数发生器
  */
-export function rollWeather(dayIndex: number, rng: Rng): WeatherLogic {
+export function rollWeather(
+  dayIndex: number,
+  rng: Rng,
+  config: BalanceConfig = DEFAULT_BALANCE_CONFIG,
+): WeatherLogic {
   assertIntegerInRange(dayIndex, 0, FINAL_DAY_INDEX, 'rollWeather:dayIndex');
 
   // 固定骨架 1：Day1 教学关不下雪
@@ -45,14 +46,14 @@ export function rollWeather(dayIndex: number, rng: Rng): WeatherLogic {
 
   // 固定骨架 2：Day12 Boss 关 70% 下雪
   if (dayIndex === FINAL_DAY_INDEX) {
-    return rng() < WEATHER_SNOW_RATE_FINAL_DAY ? 'snow' : 'clear';
+    return rng() < config.WEATHER_SNOW_RATE_FINAL_DAY ? 'snow' : 'clear';
   }
 
   // 随机扰动：普通工作日 20% 下雪（Day 2/3/4/5/8/9/10/11）
   const isWorkDay = WORK_DAY_INDICES.includes(dayIndex);
 
   if (isWorkDay) {
-    return rng() < WEATHER_SNOW_RATE_NORMAL_DAY ? 'snow' : 'clear';
+    return rng() < config.WEATHER_SNOW_RATE_NORMAL_DAY ? 'snow' : 'clear';
   }
 
   // 周末（Day6/7）：默认不下雪（无通勤，不影响数值）
