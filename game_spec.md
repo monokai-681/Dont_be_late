@@ -1,9 +1,9 @@
 # 《别迟到》游戏数值规格文档 (Game Spec)
 
-> **版本**: v1.2
+> **版本**: v1.3
 > **生成日期**: 2026-08-03
 > **最后更新**: 2026-08-06
-> **状态**: takeover 规则已收敛；新功能开发暂缓，先完成接管整理
+> **状态**: takeover 已结束；早期原型开发进行中，D-8 首轮实验参数已落实到代码与测试
 
 ---
 
@@ -230,7 +230,7 @@ function calculateSOL(inventory: Inventory, doraUsedTonight: boolean): number {
  * @returns 0 ~ SNOOZE_MAX 之间的整数
  */
 function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean, rng: Rng): number {
-  // Step 1: 期望次数 = min(sleepDebt / 100, 3.0)
+  // Step 1: 期望次数 = min(sleepDebt / 100, SNOOZE_MAX=6)
   let expected = Math.min(sleepDebt / SNOOZE_GRADIENT, SNOOZE_MAX);
 
   // Step 2: 智能台灯：期望乘以 0.65（整体打 65 折）
@@ -766,7 +766,7 @@ function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameStat
 | P1-1 | 结算画面文案 | 通关/失败/不同余额区间的讽刺文案（需要 10~15 条）| — |
 | P1-2 | 平衡性调整 | 跑模拟器 10 万局后根据通关率微调：SOL / 通勤费 / 取消率 / 下雪概率 | 当前值作为起点；目标口径待 D-10 决策 |
 | P1-3 | 前端 flavor 映射 | 天气 flavor 随机池的具体文案/图标命名 | §7.1 已列 6 种 flavor |
-| D-8 | 固定保守策略是否允许无脑通关 | **已确认首轮实验组**：09:00 打卡；地铁 60 分钟；snooze 上限 6 次、每次 9 分钟；睡眠债衰减 0.5；地铁风险 0% | 07:00 + 地铁在 0~3 次 snooze 时准时，4~6 次时迟到；`SNOOZE_GRADIENT=100`、晨间流程 25 分钟及其他参数首轮不变，待模拟器验证后再调 |
+| D-8 | 固定保守策略是否允许无脑通关 | **已实现首轮实验组**：09:00 打卡；地铁 60 分钟；snooze 上限 6 次、每次 9 分钟；睡眠债衰减 0.5；地铁风险 0% | 2026-08-06 已同步规格、代码与回归测试：07:00 + 地铁在 0~3 次 snooze 时准时，4~6 次时迟到；`SNOOZE_GRADIENT=100`、晨间流程 25 分钟及其他参数首轮不变，待模拟器验证后再调 |
 | D-9 | 是否允许不可规避的纯 RNG 死亡 | **已确认**：允许运气造成失败，但安全参考策略下纯 RNG 导致的整局失败率必须低于 25% | 统计口径见 §8.4 |
 | D-10 | 模拟器目标通关率 | **延期决定**：最终目标区间必须基于分策略模拟数据讨论，现在不预设 40%~60% 等结论 | 现在先规划策略分组、失败归因和输出指标，模拟器完成后拍板 |
 | D-11 | 最终余额的地位 | **已确认**：通关是主目标；最终余额是通关后的次级分数；失败局余额只展示、不参与正式成绩比较 | 见 §5.3 |

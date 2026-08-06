@@ -10,9 +10,9 @@
 - Phase 1-1（TypeScript 基础设施）已完成。
 - Phase 1-2（SOL、snooze、通勤、天气、事件五个基础函数）已完成。
 - Phase 1-3（shop + reducer 状态机）尚未开始。
-- 模拟器、单元测试、CLI 和 Web UI 尚未实现。
+- D-8 的 snooze 与通勤回归测试已实现；完整引擎测试、模拟器、CLI 和 Web UI 尚未实现。
 
-因此当前只有已有核心模块可以通过 TypeScript 编译；`test`、`sim` 和 `cli` 脚本要等对应阶段完成后才能正常运行。
+当前已有核心模块可以通过 TypeScript 编译，D-8 回归测试可以直接运行；`sim` 和 `cli` 脚本要等对应阶段完成后才能正常运行。
 
 ## 当前核心规则摘要
 
@@ -53,12 +53,12 @@ intro → bedtime → sleeping → wakeup → commute → office/bribe → next 
 ```bash
 npm install
 npm run build
+npm test
 ```
 
 预置但尚未具备实现文件的命令：
 
 ```bash
-npm test
 npm run sim
 npm run sim:10k
 npm run cli
@@ -66,6 +66,6 @@ npm run cli
 
 Node.js 要求：20 或更高版本。
 
-## 当前接管状态
+## 当前开发状态
 
-项目处于 takeover 整理阶段。在状态模型和剩余规则确认完成前，不开始新的功能开发。
+takeover 阶段已于 2026-08-06 结束，项目已恢复早期原型开发。D-8 首轮实验参数已经同步到规格、核心函数和回归测试；下一步按 `kanban.md` 推进阶段 1。

@@ -111,7 +111,7 @@ export interface GameState {
   commuteChoice?: CommuteId;    // 玩家选的通勤方式
   commuteMin?: number;          // 通勤结算出的耗时
   commuteCancelled?: boolean;   // 快车被取消了吗（前端 flavor 用）
-  arriveMin?: number;           // 到达分钟数（>600 迟到）
+  arriveMin?: number;           // 到达分钟数（>540 迟到）
   isLate?: boolean;             // 今日是否迟到（注意：贿赂成功后会被置回 false）
   weatherToday?: WeatherLogic;  // 今日天气逻辑层
   eventToday?: EventId;         // 今日城市事件

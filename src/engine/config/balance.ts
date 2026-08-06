@@ -5,7 +5,7 @@
  * 全部导出为 let（而不是 const），方便模拟器跑参数扫描时动态覆盖。
  *
  * 改这里不需要同步更新 game_spec（除非想把某组参数固定下来）。
- * 调参目标：10 万局通关率在 30%~50% 区间。
+ * 调参目标：等模拟器提供分策略数据后按 game_spec D-10 决定。
  * ---------------------------------------------------------------
  */
 
@@ -19,7 +19,7 @@ export let SOL_EAR_PLUGS_REDUCTION  = -3;   // 耳塞削减 SOL
 export let SOL_DORA_REDUCTION       = -15;  // DORA 单颗削减 SOL
 
 // ── 通勤调参 ───────────────────────────────────────────────────
-export let COMMUTE_SUBWAY_MIN       = 40;
+export let COMMUTE_SUBWAY_MIN       = 60;
 export let COMMUTE_SUBWAY_COST      = 5;
 
 export let COMMUTE_EXPRESS_MIN      = 25;
@@ -60,7 +60,7 @@ export let SHOP_PRICE_SMART_LAMP    = 95;   // 智能台灯（次日晚到货，
 export function resetBalanceToDefaults(): void {
   SOL_BASE_OVERRIDE = null;
   SOL_PILLOW_REDUCTION = -6; SOL_EYE_MASK_REDUCTION = -4; SOL_EAR_PLUGS_REDUCTION = -3; SOL_DORA_REDUCTION = -15;
-  COMMUTE_SUBWAY_MIN = 40; COMMUTE_SUBWAY_COST = 5;
+  COMMUTE_SUBWAY_MIN = 60; COMMUTE_SUBWAY_COST = 5;
   COMMUTE_EXPRESS_MIN = 25; COMMUTE_EXPRESS_COST = 30; COMMUTE_EXPRESS_CANCEL_RATE = 0.30; COMMUTE_EXPRESS_CANCEL_EXTRA_MIN = 10;
   COMMUTE_PREMIUM_MIN = 25; COMMUTE_PREMIUM_COST = 60;
   WEATHER_SNOW_BONUS_MIN = 15; EVENT_NORMAL_BONUS_MIN = 15; EVENT_HOLIDAY_BONUS_MIN = 20;

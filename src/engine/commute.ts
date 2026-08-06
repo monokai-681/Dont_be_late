@@ -7,7 +7,7 @@
  * - 原型阶段移除「开车」选项，只剩 3 档
  * - 快车取消：最多发生 0 或 1 次，**绝不会取消第二次**（重新叫的第二辆必然成功）
  * - 专车：取消率 0%（从不取消），但**不免疫**天气 / 事件加时
- * - 地铁：完全不受天气、事件、取消影响，永远 40 分钟 / 5 元
+ * - 地铁：完全不受天气、事件、取消影响，永远 60 分钟 / 5 元
  * ---------------------------------------------------------------
  */
 
@@ -43,7 +43,7 @@ export function calculateCommute(
 
   switch (choice) {
     case 'subway':
-      baseMin  = COMMUTE_SUBWAY_MIN;   // 40
+      baseMin  = COMMUTE_SUBWAY_MIN;   // 60
       baseCost = COMMUTE_SUBWAY_COST;  // 5
       cancelRate = 0;
       immune = true;
