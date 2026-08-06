@@ -11,7 +11,7 @@
 | 阶段 | 名称 | 状态 | 关键产出 |
 |------|------|------|---------|
 | 0 | 设计文档 & 数值拍板 & 方案确认 | ✅ 完成 | game_spec v1.1 + 4 阶段流程 + 7 优化点 + 目录结构约定 |
-| 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3⏳） | 基础设施+5核心函数已交付；D-8 参数与回归测试已落地；待做 shop/reducer + 模拟器 + 其余单测 |
+| 1 | 无 UI 核心引擎 | 🔄 进行中（1-1✅ 1-2✅ 1-3⏳） | 基础设施+5核心函数已交付并完成基础加固；待做 shop/reducer + 模拟器 + 整局测试 |
 | 2 | 命令行可交互版 | ⏳ 待开始 | `src/cli.ts`，终端手动玩一局 |
 | 3 | Web UI | ⏳ 待开始 | 响应式网页：Intro + 5 个工作日 Screen + Result，共 7 个逻辑 Screen |
 | 4 | 平衡调优 + 文案 | ⏳ 待开始 | 10 万局模拟；通关率口径待 D-10 确认；P1 TODO 全清 |
@@ -86,6 +86,18 @@
 - [x] #1 SOL_BASE 命名对齐：`constants.ts` 中 `SOL_BASE__MIN`（双下划线错误命名）改回 `SOL_BASE`（与 game_spec §2.2 一致），`index.ts` barrel 新增导出
 - [x] #2 events.ts 加时参数改为读 balance：`bonusMin` 硬编码 15/20 → 改用 `EVENT_NORMAL_BONUS_MIN` / `EVENT_HOLIDAY_BONUS_MIN`，避免以后调参不一致
 - [x] tsc --strict 0 错误回归验证通过
+
+---
+
+### 阶段 1 基础函数加固（2026-08-06）
+
+- [x] C-1/C-2：新增统一运行时校验；非法 dayIndex、sleepDebt、通勤 ID、天气标记和事件加时立即抛出标准错误
+- [x] C-4：`rngInt()` 拒绝非整数或反向边界
+- [x] C-9：天气工作日判断复用 `WORK_DAY_INDICES`
+- [x] C-10/C-11：普通事件 flavor 保留精确字面量类型，并统一使用 `rngPickIndex()`
+- [x] 修正 `GameState` / `DayRecord` 中残留的 Day13 注释；Result 不占 Day 编号、不写 `dailyLog`
+- [x] 五个基础函数与随机工具共 6 个测试套件、76 项测试全部通过
+- [x] 覆盖率：Statements 98.81% / Branches 96% / Lines 99.06%；`tsc --noEmit` 0 错误
 
 ---
 
@@ -177,6 +189,7 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
 #### 1-5 单元测试
 
 **文件**：
+- [x] `src/tests/sol.test.ts` — SOL 锚点、永久道具、DORA、台灯无关性、扫描覆盖值与下限
 - [x] `src/tests/snooze.test.ts` — D-8 已完成：
   1. debt=0 → 期望 0 次，实际 0 次（100 万次 roll 不出 >0）
   2. debt=100 有灯 → 期望 0.65 次，分布收敛到约 65% 出 1 次
@@ -190,6 +203,9 @@ CLI 入口：`npm run sim 1000` → 跑 1000 局打印报告；`npm run sim:10k`
   3. 快车 + 下雪 + 事件 +15：加时 `min(15+15,25)=25`，所以不取消 50min、取消时 60min
   4. 快车取消最多 1 次：即使 rng 连续 100 次 <0.3，实际 cancelled 只影响 1 次（bonusMin 只加 10，不会 20）
   5. 专车：从不 cancelled，但雪和事件加时正确
+- [x] `src/tests/weather.test.ts` — Day1、Day12、普通工作日、周末和 dayIndex 边界
+- [x] `src/tests/events.test.ts` — Day4/5、Day12、非事件日、不重复 flavor 和 dayIndex 边界
+- [x] `src/tests/random.test.ts` — seed 可复现、整数端点、非法范围和空数组
 - [ ] `src/tests/engine.test.ts` — 待 reducer 完成后实现整局变体测试：
   1. Day1 教学关无雪无事件 + 闹钟 7:00 + 地铁 → 100% 不迟到，顺利进入 Day2
   2. 周末 Day6 PASS_WEEKEND：sleepDebt=100 → Day6 后=50 → Day7 后=25；newDebt 始终不增加
@@ -312,31 +328,28 @@ Dont_be_late/
 - [x] 🟡 旧版 `pendingBribe` 争议 —— takeover 决策已取代旧方案：使用 `phase='bribe'` 表达上下文，由 reducer 拒绝乱序 Action
 - [x] 🟡 kanban §10.3 `onBuyItem` itemId:string vs types.ts `ShopItemId` + qty 默认值不一致 —— game_spec 已同步为 `itemId: ShopItemId, qty?: number`
 - [x] 🟡 §2.2 机制常量锚点表缺少 `MAX_COMMUTE_BONUS = 25` 行 —— 已补
-- [x] 🟡 Day13 边界 —— takeover 最终决策：Day 只到 12；Result 是 `GameResult/result phase`，不占 Day 编号、不写 `dailyLog`；现有 types.ts 的 0~13/1~13 注释等待接管代码整理时回改
+- [x] 🟡 Day13 边界 —— takeover 最终决策：Day 只到 12；Result 是 `GameResult/result phase`，不占 Day 编号、不写 `dailyLog`；types.ts 残留注释已于 2026-08-06 回改
 - [x] 🔴 C-6 PendingArrivals.dora 文档&接口矛盾（C-6 决策 X：不支持 DORA 次日到货）—— 从 types.ts PendingArrivals 接口删除 dora 字段；game_spec §6 PendingArrivals / §10.3 applyPendingArrivals 模板同步删除 dora 行；注释明确 DORA 永远当晚进 inventory
 - [x] 🔴 C-7 SOL_BASE 锚点 vs SOL_BASE_MINUTES 双份并行（C-7 决策 A：锚点权威 + 覆盖层）—— balance.ts SOL_BASE_MINUTES 改名 SOL_BASE_OVERRIDE（number\|null，null=用锚点 SOL_BASE=45）；sol.ts 改为 `SOL_BASE_OVERRIDE ?? SOL_BASE`；resetBalanceToDefaults 里 SOL_BASE_OVERRIDE=null 重置
+- [x] 🔴 C-1/C-2 公共函数输入边界 —— 已新增统一 runtime guards，拒绝非法 dayIndex、sleepDebt、通勤 ID、天气标记和事件加时
+- [x] 🔴 C-4 `rngInt()` 静默接受错误范围 —— 已拒绝非整数边界和 `min > max`
+- [x] 🟡 C-9/C-10/C-11 基础函数整理 —— 天气复用工作日常量；事件 flavor 使用精确类型并复用 `rngPickIndex()`
 
 ---
 
-### 🔴 高（交接前必须修或至少写清修复代码路径）
+### 🔴 高（对外引擎完成前必须修）
 
 | # | 来源 | 标题 | 一句话风险 | 推荐修复代码 / 规范链接 |
 |---|------|------|------------|-------------------------|
-| C-1 | 代码 4.1 | 所有对外函数缺 dayIndex / sleepDebt / eventBonus / CommuteId 范围断言 | sleepDebt=-50 会算出 -1 次 snooze → 早晨流程凭空少 9 分钟；非法 CommuteId 会导致 NaN 通勤时间和花费；dayIndex 越界静默返回错误值不抛错 | **统一在每个 barrel 导出函数顶部加范围断言**：<br>`assertIntegerInRange(dayIndex, 0, 12, 'rollWeather:dayIndex')`<br>`assertNonNegative(sleepDebt, 'rollSnoozeCount')`<br>`assertEnum(choice, ['subway','express','premium'], 'calculateCommute')`<br>commute switch 补 `default: throwUnknownEnum(choice)` |
-| C-2 | 代码 4.3 + 4.1 | calculateCommute bonusMin 缺下限 0 保护 + eventBonus 范围断言 | 传负数 eventBonus 会让通勤时间缩短（作弊）；虽然正常调用不会传负，但作为公共 API 必须自证健壮 | `bonusMin = Math.max(0, Math.min(bonusMin, MAX_COMMUTE_BONUS))`（上下限双保护）；入口补 `assertIntegerInRange(eventBonus, 0, EVENT_HOLIDAY_BONUS_MIN || 20)` |
-| C-4 | 代码 4.4 | `rngInt(min, max)` 对 `min > max`（调用方传反）无断言 | 结果悄悄落在错误区间不抛错 —— 属于最难调试的「静默数值偏差」 | 入口加 2 行断言：<br>`if (min > max) throw new Error('rngInt: min>max')`<br>`if (!Number.isInteger(min)\|\|!Number.isInteger(max)) throw 'integer required'` |
 | C-5 | 代码 6.2 | GameState 15 个 runtime optional 字段无「阶段→非空」契约 | reducer 读取未初始化字段会产生 `undefined/NaN` 链式污染 | **决策已定、代码待整理**：改为带 `phase` 的判别联合，每个阶段只暴露本阶段必需字段；reducer 同时做运行时 phase 校验 |
 
 ---
 
-### 🟡 中（交接前建议修，减少新人困惑）
+### 🟡 中（阶段 1 内建议修）
 
 | # | 来源 | 标题 | 推荐修复 |
 |---|------|------|---------|
 | C-8 | 代码 1.2 | `EngineDeps.now` 预留字段从未被任何地方读取 | 要么直接删除（避免类型膨胀），要么在注释里标 `@deprecated 原型阶段不传` |
-| C-9 | 代码 2.2 | weather.ts 手写 workDay 重复硬编码，没复用 `WORK_DAY_INDICES`；多写了 dayIndex===12（虽然进不到，但容易误导） | `const isWorkDay = WORK_DAY_INDICES.includes(dayIndex)` 一行替代 |
-| C-10 | 代码 2.3 + 6.1 | `NORMAL_EVENT_FLAVORS` 声明 `string[]`，丢了字面量类型，需要 `flavor as EventId` 断言 | 改为 `const NORMAL_EVENT_FLAVORS: readonly (EventId & string)[] = ['concert','expo','marathon'] as const;`，同时删除 `as EventId` 断言，避免拼写错误被类型系统吞掉 |
-| C-11 | 代码 4.2 | events.ts 手写 `Math.floor(rng()*N)`，没复用 `rngPickIndex`（统一了空数组保护） | `const idx = rngPickIndex(rng, remaining)`，保持所有随机整数走统一入口 |
 | C-12 | 代码 7.4 | 全局可变 balance 参数会破坏函数纯度并污染并行测试 | 接管代码整理时定义不可变 `BalanceConfig` 默认对象，经 `EngineDeps`/函数参数注入；模拟器参数扫描复制配置，不修改模块全局 |
 | C-13 | 代码 6.2 | DayRecord 接口 9 个 optional 字段，没有工作日/周末子类型区分 | 改为 `WorkDayRecord | WeekendRecord` 判别联合；Result 不生成 DayRecord |
 
@@ -354,7 +367,7 @@ Dont_be_late/
 
 ### 阶段 1 后续工作流
 
-1. 先处理 C-1/C-2/C-4 输入断言与当前五个函数剩余回归测试
-2. 实现阶段 1-3（shop.ts + engine.ts reducer）及 C-5 phase 类型，同步处理 Day12/Result 类型回改和 C-9/C-10/C-11
-3. 将全局可变平衡参数收敛为可注入的 `BalanceConfig`，避免模拟器与并行测试互相污染
+1. 设计并实现阶段 1-3（shop.ts + engine.ts reducer）及 C-5 phase 类型
+2. 将全局可变平衡参数收敛为可注入的 `BalanceConfig`，避免模拟器与并行测试互相污染
+3. 完成 `engine.test.ts` 整局测试，覆盖周末、贿赂、余额与非法 Action
 4. 完成阶段 1-4 模拟器，再根据 D-9 验收指标和 D-10 待定口径分析分策略数据

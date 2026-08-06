@@ -24,7 +24,8 @@
 
 import type { WeatherLogic } from './types';
 import type { Rng } from './random';
-import { FINAL_DAY_INDEX } from './constants';
+import { FINAL_DAY_INDEX, WORK_DAY_INDICES } from './constants';
+import { assertIntegerInRange } from './validation';
 import {
   WEATHER_SNOW_RATE_NORMAL_DAY,
   WEATHER_SNOW_RATE_FINAL_DAY,
@@ -37,6 +38,8 @@ import {
  * @param rng       可复现随机数发生器
  */
 export function rollWeather(dayIndex: number, rng: Rng): WeatherLogic {
+  assertIntegerInRange(dayIndex, 0, FINAL_DAY_INDEX, 'rollWeather:dayIndex');
+
   // 固定骨架 1：Day1 教学关不下雪
   if (dayIndex === 1) return 'clear';
 
@@ -46,9 +49,7 @@ export function rollWeather(dayIndex: number, rng: Rng): WeatherLogic {
   }
 
   // 随机扰动：普通工作日 20% 下雪（Day 2/3/4/5/8/9/10/11）
-  const isWorkDay =
-    dayIndex === 1 || dayIndex === 2 || dayIndex === 3 || dayIndex === 4 || dayIndex === 5 ||
-    dayIndex === 8 || dayIndex === 9 || dayIndex === 10 || dayIndex === 11 || dayIndex === 12;
+  const isWorkDay = WORK_DAY_INDICES.includes(dayIndex);
 
   if (isWorkDay) {
     return rng() < WEATHER_SNOW_RATE_NORMAL_DAY ? 'snow' : 'clear';

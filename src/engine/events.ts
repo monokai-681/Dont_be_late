@@ -19,23 +19,30 @@
  */
 
 import type { EventId } from './types';
-import type { Rng } from './random';
+import { rngPickIndex, type Rng } from './random';
 import { FINAL_DAY_INDEX } from './constants';
+import { assertIntegerInRange } from './validation';
 import {
   EVENT_NORMAL_TRIGGER_RATE,
   EVENT_NORMAL_BONUS_MIN,
   EVENT_HOLIDAY_BONUS_MIN,
 } from './config/balance';
 
-const NORMAL_EVENT_FLAVORS: readonly string[] = ['concert', 'expo', 'marathon'];
+type NormalEventId = Exclude<EventId, null | 'holidayRush'>;
+
+const NORMAL_EVENT_FLAVORS: readonly NormalEventId[] = [
+  'concert',
+  'expo',
+  'marathon',
+];
 
 /**
  * 取一个未使用过的普通事件 flavor。如果全部用完就 fallback 到第一个（极端情形）。
  */
-function pickUnusedFlavor(usedFlavors: readonly string[], rng: Rng): string {
+function pickUnusedFlavor(usedFlavors: readonly string[], rng: Rng): NormalEventId {
   const remaining = NORMAL_EVENT_FLAVORS.filter(f => !usedFlavors.includes(f));
   if (remaining.length === 0) return NORMAL_EVENT_FLAVORS[0]; // 兜底（理论不会触发，需要 3 天以上事件才会用光）
-  const idx = Math.floor(rng() * remaining.length);
+  const idx = rngPickIndex(rng, remaining);
   return remaining[idx];
 }
 
@@ -56,6 +63,8 @@ export function rollEvent(
   usedEventFlavors: readonly string[],
   rng: Rng,
 ): RollEventResult {
+  assertIntegerInRange(dayIndex, 0, FINAL_DAY_INDEX, 'rollEvent:dayIndex');
+
   // 规则 3：Day12 固定节前出行高峰，独占不 roll 其他
   if (dayIndex === FINAL_DAY_INDEX) {
     return { eventId: 'holidayRush', bonusMin: EVENT_HOLIDAY_BONUS_MIN };
@@ -66,7 +75,7 @@ export function rollEvent(
     if (rng() < EVENT_NORMAL_TRIGGER_RATE) {
       const flavor = pickUnusedFlavor(usedEventFlavors, rng);
       return {
-        eventId: flavor as EventId, // flavor 是 'concert' | 'expo' | 'marathon'，属于 EventId 子集
+        eventId: flavor,
         bonusMin: EVENT_NORMAL_BONUS_MIN,
         newlyUsedFlavor: flavor,
       };

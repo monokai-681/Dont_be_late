@@ -16,6 +16,7 @@
 
 import type { Rng } from './random';
 import { SNOOZE_MAX, SNOOZE_GRADIENT, LAMP_MULTIPLIER } from './constants';
+import { assertFiniteNonNegative } from './validation';
 
 /**
  * 计算今天早晨 snooze 次数。
@@ -29,6 +30,8 @@ export function rollSnoozeCount(
   hasSmartLamp: boolean,
   rng: Rng,
 ): number {
+  assertFiniteNonNegative(sleepDebt, 'rollSnoozeCount:sleepDebt');
+
   // Step 1: 期望次数
   let expected = Math.min(sleepDebt / SNOOZE_GRADIENT, SNOOZE_MAX);
 

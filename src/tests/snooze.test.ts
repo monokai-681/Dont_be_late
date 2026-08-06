@@ -9,6 +9,13 @@ import {
 } from '../engine';
 
 describe('D-8 snooze balance', () => {
+  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid sleep debt %s',
+    sleepDebt => {
+      expect(() => rollSnoozeCount(sleepDebt, false, () => 0)).toThrow(RangeError);
+    },
+  );
+
   test('locks the 09:00 deadline and six-snooze cap', () => {
     expect(CLOCKIN_DEADLINE).toBe(540);
     expect(SNOOZE_MAX).toBe(6);

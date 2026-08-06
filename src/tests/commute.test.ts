@@ -32,6 +32,18 @@ describe('D-8 commute balance', () => {
     expect(rngCalls).toBe(0);
   });
 
+  test('rejects unsupported commute choices at runtime', () => {
+    expect(() => calculateCommute('bike' as never, false, 0, () => 0)).toThrow(RangeError);
+  });
+
+  test.each([-1, 1.5, 21])('rejects invalid event bonus %s', eventBonus => {
+    expect(() => calculateCommute('express', false, eventBonus, () => 0)).toThrow(RangeError);
+  });
+
+  test('rejects a non-boolean snow flag at runtime', () => {
+    expect(() => calculateCommute('express', 'yes' as never, 0, () => 0)).toThrow(TypeError);
+  });
+
   test('reset restores the D-8 subway defaults', () => {
     Balance.COMMUTE_SUBWAY_MIN = 1;
     Balance.COMMUTE_SUBWAY_COST = 1;

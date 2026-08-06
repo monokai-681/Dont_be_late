@@ -14,12 +14,16 @@
 import type { CommuteId, CommuteResult } from './types';
 import type { Rng } from './random';
 import { MAX_COMMUTE_BONUS } from './constants';
+import { assertBoolean, assertIntegerInRange, assertNever, assertOneOf } from './validation';
 import {
   COMMUTE_SUBWAY_MIN,   COMMUTE_SUBWAY_COST,
   COMMUTE_EXPRESS_MIN,  COMMUTE_EXPRESS_COST,  COMMUTE_EXPRESS_CANCEL_RATE,  COMMUTE_EXPRESS_CANCEL_EXTRA_MIN,
   COMMUTE_PREMIUM_MIN,  COMMUTE_PREMIUM_COST,
   WEATHER_SNOW_BONUS_MIN,
+  EVENT_HOLIDAY_BONUS_MIN,
 } from './config/balance';
+
+const COMMUTE_IDS: readonly CommuteId[] = ['subway', 'express', 'premium'];
 
 /**
  * 通勤结算（工作日选完交通方式后调用）
@@ -35,6 +39,15 @@ export function calculateCommute(
   eventBonus: number,
   rng: Rng,
 ): CommuteResult {
+  assertOneOf(choice, COMMUTE_IDS, 'calculateCommute:choice');
+  assertBoolean(isSnow, 'calculateCommute:isSnow');
+  assertIntegerInRange(
+    eventBonus,
+    0,
+    EVENT_HOLIDAY_BONUS_MIN,
+    'calculateCommute:eventBonus',
+  );
+
   // 三档基础参数
   let baseMin: number;
   let baseCost: number;
@@ -60,6 +73,8 @@ export function calculateCommute(
       cancelRate = 0;                  // 专车从不取消
       immune = false;
       break;
+    default:
+      assertNever(choice, 'calculateCommute:choice');
   }
 
   // Step 1: 天气 + 事件加时（仅非免疫交通）— 叠加后有硬上限（MAX_COMMUTE_BONUS=25，2026-08-05 机制简化）
@@ -67,7 +82,7 @@ export function calculateCommute(
   if (!immune) {
     if (isSnow) bonusMin += WEATHER_SNOW_BONUS_MIN; // 下雪 +15
     bonusMin += eventBonus;                          // 事件 +15/+20 或 0
-    bonusMin = Math.min(bonusMin, MAX_COMMUTE_BONUS); // ⚠️ 双灾叠加硬上限 25 分钟
+    bonusMin = Math.max(0, Math.min(bonusMin, MAX_COMMUTE_BONUS)); // ⚠️ 双灾叠加硬上限 25 分钟
   }
 
   // Step 2: 快车取消 roll（只 roll 一次！取消最多 0 或 1 次，第二次必成功）

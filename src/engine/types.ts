@@ -73,7 +73,7 @@ export type GameResult =
 
 // ── 每日回顾记录 ────────────────────────────────────────────────
 export interface DayRecord {
-  day: number;                  // 1 ~ 13（Day13=结算日，只有 day/isWorkDay 两个字段有值，其余可省略）
+  day: number;                  // 1 ~ 12；Result 不生成 DayRecord
   isWorkDay: boolean;
   alarmHHMM?: string;           // 工作日才有
   sleepHHMM?: string;           // "实际睡眠 6h35m" 风格，工作日才有
@@ -88,7 +88,7 @@ export interface DayRecord {
 // ── 核心：整局游戏状态 ──────────────────────────────────────────
 export interface GameState {
   // ── 基础计数 ───────────────────────────────────────────────
-  dayIndex: number;             // 0 ~ 13（Day0=开局介绍，Day1~Day12=游戏循环10工作日+2周末，Day13=结算日）
+  dayIndex: number;             // 0 ~ 12（Day0=开局介绍，Day1~12=游戏循环；Result 不占 Day 编号）
   balance: number;              // 当前余额（元）
   sleepDebt: number;            // 当前累计睡眠债（分钟，始终 ≥ 0）
   bribeUsed: boolean;           // 贿赂是否已使用
@@ -117,7 +117,7 @@ export interface GameState {
   eventToday?: EventId;         // 今日城市事件
 
   // ── 每日回顾日志 ───────────────────────────────────────────
-  dailyLog: DayRecord[];        // 长度 = 已结束的 Day 数（Day1 结束后 push 第 1 条；Day13 结算日 push 1 条总结）
+  dailyLog: DayRecord[];        // 只记录已结束的 Day1~12；Result 不写入日志
 }
 
 // ── 依赖注入（reducer/deps）─────────────────────────────────────

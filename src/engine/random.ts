@@ -42,6 +42,12 @@ export function createRngFromString(str: string): Rng {
 
 /** 方便的工具：从 [min, max] 取整数（闭区间） */
 export function rngInt(rng: Rng, min: number, max: number): number {
+  if (!Number.isInteger(min) || !Number.isInteger(max)) {
+    throw new TypeError('rngInt:min and max must be integers');
+  }
+  if (min > max) {
+    throw new RangeError('rngInt:min must be less than or equal to max');
+  }
   return Math.floor(rng() * (max - min + 1)) + min;
 }
 

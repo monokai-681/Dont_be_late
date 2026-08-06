@@ -28,6 +28,13 @@
 | 类 / 接口 / 类型名 | **PascalCase** | `interface GameState`, `class Engine` | `interface gameState` |
 | 函数 / 方法名 | **camelCase** | `function rollSnoozeCount()` | `Roll_Snooze_Count()` |
 
+### 公共函数输入契约
+
+- 引擎从 `src/engine/index.ts` 暴露的公共计算函数必须在入口校验运行时输入，不能只依赖 TypeScript 静态类型。
+- 非整数或越界的 `dayIndex`、负数或非有限的 `sleepDebt`、非法通勤 ID、非布尔天气标记以及越界的事件加时必须立即抛出 `TypeError` 或 `RangeError`，不得静默产生 `NaN` 或缩短时间。
+- `rngInt()` 只接受整数边界且要求 `min <= max`；非法范围必须立即失败。
+- 以上校验只保护 API 边界，不改变合法游戏输入下的概率或数值。
+
 ---
 
 ## 2. 固定锚点 & 常量（硬编码常量）
