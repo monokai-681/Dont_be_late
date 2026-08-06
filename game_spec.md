@@ -1,9 +1,9 @@
 # 《别迟到》游戏数值规格文档 (Game Spec)
 
-> **版本**: v1.5
+> **版本**: v1.6
 > **生成日期**: 2026-08-03
 > **最后更新**: 2026-08-07
-> **状态**: takeover 已结束；Phase 1-4 多策略模拟器已实现，D-8 二次方案与 D-10 待决
+> **状态**: takeover 与 Phase 1 已结束；D-8 第二轮参数已验证，D-10 待决
 
 ---
 
@@ -59,9 +59,10 @@
 | `ROUTINE_BASE` | `25`（分钟）| 早晨基础流程时间：起床→出门所需固定耗时（洗漱/穿衣/拿包），不含 snooze |
 | `SNOOZE_PER` | `9`（分钟）| 每一次 snooze（赖床）增加的早晨流程时间 |
 | `SNOOZE_MAX` | `6`（次）| snooze 次数硬上限（最大额外 54 分钟）；D-8 首轮实验值 |
-| `SNOOZE_GRADIENT` | `100`（分钟 sleepDebt）| snooze 一阶概率爬满 100% 所需睡眠债分钟数（每欠 1 分钟 → +1% 第一次概率）|
+| `SNOOZE_GRADIENT` | `60`（分钟 sleepDebt）| 每增加 60 分钟睡眠债，snooze 期望次数增加 1；D-8 第二轮正式值 |
 | `LAMP_MULTIPLIER` | `0.65` | 智能台灯效果：snooze 期望次数乘以该系数（打 65 折 = 减少 35% 赖床概率）|
-| `DEBT_DECAY` | `0.5` | sleepDebt 每日衰减系数：前一天的 sleepDebt 只保留 50% 带入第二天 |
+| `WORKDAY_DEBT_CARRY` | `0.5` | 工作日计算当晚新债前，旧 sleepDebt 保留 50% |
+| `WEEKEND_DEBT_DECAY` | `0.5` | Day 6/7 各自保留 50% 旧 sleepDebt；完整周末后剩 25% |
 | `MAX_COMMUTE_BONUS` | `25`（分钟）| 快车/专车 天气+事件叠加加时的硬上限（2026-08-05 机制简化：二者独立 roll，双灾压到 25 封顶）|
 
 ### 2.3 尺寸/结构常量
@@ -139,7 +140,7 @@
     └──────┬───────┘
            │
      sleepDebt 已在本日睡眠结束、snooze 之前更新：
-       morningDebt = previousCarriedDebt × DEBT_DECAY + newDebtTonight
+       morningDebt = previousCarriedDebt × WORKDAY_DEBT_CARRY + newDebtTonight
        本日 snooze 使用 morningDebt；通勤结束后不再重复衰减
        将 morningDebt 作为 carriedDebt 带入下一个 Day
 ```
@@ -157,7 +158,7 @@
            │ 玩家点击「好好休息」
            │
      ★ 不执行 SOL、不执行 newDebt 计算（周末默认睡够，newDebt = 0）
-     ★ sleepDebt 只做衰减：effectiveDebt_nextDay = currentSleepDebt × DEBT_DECAY
+     ★ sleepDebt 只做衰减：effectiveDebt_nextDay = currentSleepDebt × WEEKEND_DEBT_DECAY
      ★ 跳转到下一个 Day
 ```
 
@@ -177,7 +178,7 @@
 工作日当晚睡眠结束、计算 snooze 之前：
   previousCarriedDebt = sleepDebt
   newDebt = max(0, TARGET_SLEEP_MIN - actualSleepMin)
-  sleepDebt = previousCarriedDebt × DEBT_DECAY + newDebt
+  sleepDebt = previousCarriedDebt × WORKDAY_DEBT_CARRY + newDebt
 
 紧接着的早晨：
   rollSnoozeCount(sleepDebt, ...)  // 当晚新增的 newDebt 立即影响本次早晨
@@ -186,7 +187,7 @@
   不再对 sleepDebt 做第二次衰减；直接带入下一个 Day
 
 周末不执行睡眠和 newDebt，只执行一次：
-  sleepDebt = sleepDebt × DEBT_DECAY
+  sleepDebt = sleepDebt × WEEKEND_DEBT_DECAY
 
 其中实际睡眠 actualSleepMin：
   actualSleepMin = max(0, alarmMin - sol)   // alarmMin 是玩家设置的闹钟时间
@@ -231,13 +232,18 @@ function calculateSOL(inventory: Inventory, doraUsedTonight: boolean): number {
 /**
  * 计算今天早晨 snooze 次数
  * ⚠️ 算法说明伪代码：真实实现必须注入 Rng，禁止直接使用 Math.random（见 src/engine/random.ts）
- * @param sleepDebt    当天早晨生效的累计睡眠债（已在循环起点做过 ×DEBT_DECAY + newDebt 处理）
+ * @param sleepDebt    当天早晨生效的累计睡眠债（已在循环起点做过工作日结转 + newDebt 处理）
  * @param hasSmartLamp 是否购买了智能台灯
  * @param rng          可复现随机数发生器注入（mulberry32）
  * @returns 0 ~ SNOOZE_MAX 之间的整数
  */
-function rollSnoozeCount(sleepDebt: number, hasSmartLamp: boolean, rng: Rng): number {
-  // Step 1: 期望次数 = min(sleepDebt / 100, SNOOZE_MAX=6)
+function rollSnoozeCount(
+  sleepDebt: number,
+  hasSmartLamp: boolean,
+  rng: Rng,
+  config: BalanceConfig = DEFAULT_BALANCE_CONFIG,
+): number {
+  // Step 1: 期望次数 = min(sleepDebt / 60, SNOOZE_MAX=6)
   let expected = Math.min(sleepDebt / SNOOZE_GRADIENT, SNOOZE_MAX);
 
   // Step 2: 智能台灯：期望乘以 0.65（整体打 65 折）
@@ -678,15 +684,18 @@ function rollEvent(
 - 因早期消费、闹钟或通勤决策不当造成的资金不足或迟到不归类为纯 RNG 失败。
 - 25% 是上限约束，不是期望值；具体实际比例由模拟器数据决定。
 
-### 8.5 首轮模拟基线（2026-08-07）
+### 8.5 D-8 模拟验证（2026-08-07）
 
 - 工具：`src/simulator.ts`；默认 base seed `20260807`，每类策略 10,000 局，相同局号在不同策略间共享同一 seed。
 - 固定策略：不购物、不看已揭示信息，每个工作日固定 07:00 闹钟并乘地铁。
 - 普通自适应策略：购买低价睡眠用品，按睡债调整闹钟，并根据已揭示天气、事件和余额选择通勤；这是用于比较的规则型基线，不代表最优玩家。
-- 安全参考策略：07:00 闹钟，购买永久睡眠辅助，并在已揭示信息下选择“考虑快车取消后仍保证准时”的最低成本通勤。
+- 安全参考策略：固定 07:00 闹钟；根据当晚最大可能 snooze 和已揭示天气/事件，先预留最低保底通勤费，再按台灯→枕头→眼罩→耳塞的顺序购物；早晨选择“考虑快车取消后仍保证准时”的最低成本通勤，不使用 DORA。
 - 报告分别输出通关率、Day 12 到达率、余额、失败原因、死亡日、启发式失败归因和可复现失败 seed；失败归因不是因果证明，平衡结论需要结合策略规则复核。
 - 首轮关键结果：固定、普通自适应与安全参考策略均为 100% 通关；安全参考策略纯 RNG 整局失败率 0%。因此 D-9 的 `<25%` 上限形式上通过，但当前参数过于安全，不能据此认定随机体验已经合理。
-- D-8 首轮实验被模拟数据否证：虽然单日 4~6 次 snooze 会使 07:00＋地铁迟到，但当前睡眠债增长与 0.5 衰减组合没有在完整游戏中把固定策略推入该区间。必须先确认二次调整方案，再做 10 万局参数扫描。
+- D-8 首轮实验被模拟数据否证：Gradient 100 时，固定、普通自适应与安全参考策略在每类 10,000 局中均为 100% 通关；上限 6 没有被自然触发。
+- 第二轮曾测试完全线性债务累积：固定和普通策略均为 0%，安全策略仅 42.65%，纯 RNG 失败 57.35%，违反 D-9，故不采用。
+- 第二轮正式值保留工作日/周末每日 0.5 结转并将 Gradient 降至 60。默认 seed `20260807`、每类 100,000 局结果：固定策略 32.051%，普通自适应 60.786%，安全参考 99.994%；安全参考仅 6 局失败，纯 RNG 整局失败率 0.006%，通过 D-9。
+- `SNOOZE_MAX` 继续保持 6；在 0.5 结转下自然睡眠债不会触及更高上限，单独把上限改为 7 或 10 不改变默认策略结果。
 
 ---
 
@@ -807,9 +816,9 @@ function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameStat
 | P1-1 | 结算画面文案 | 通关/失败/不同余额区间的讽刺文案（需要 10~15 条）| — |
 | P1-2 | 平衡性调整 | 跑模拟器 10 万局后根据通关率微调：SOL / 通勤费 / 取消率 / 下雪概率 | 当前值作为起点；目标口径待 D-10 决策 |
 | P1-3 | 前端 flavor 映射 | 天气 flavor 随机池的具体文案/图标命名 | §7.1 已列 6 种 flavor |
-| D-8 | 固定保守策略是否允许无脑通关 | **首轮方案验证失败，待二次决策**：现行值仍为 09:00 打卡、地铁 60 分钟、snooze 上限 6 次、睡眠债衰减 0.5 | 2026-08-07 默认 seed 的 10,000 局中，07:00＋固定地铁为 100% 通关；候选方向包括恢复更早 deadline、提高 snooze 上限、去掉睡眠债衰减或组合调整，尚未选定 |
+| D-8 | 固定保守策略是否允许无脑通关 | **已确认并验证第二轮方案**：09:00 打卡、地铁 60 分钟、snooze 每次 9 分钟且上限 6、工作日/周末每日债务结转 0.5、Gradient 60 | 100,000 局中固定策略 32.051%、普通策略 60.786%、安全参考 99.994%；单独提高 snooze 上限无效 |
 | D-9 | 是否允许不可规避的纯 RNG 死亡 | **已确认**：允许运气造成失败，但安全参考策略下纯 RNG 导致的整局失败率必须低于 25% | 统计口径见 §8.4 |
-| D-10 | 模拟器目标通关率 | **待决定**：首轮分策略模拟数据已经具备，但当前参数使固定与安全策略均 100% 通关，应在 D-8 二次方案后确定正式目标区间 | 不预设 40%~60% 等结论；需同时决定以哪类策略作为主验收口径 |
+| D-10 | 模拟器目标通关率 | **待决定**：D-8 第二轮已有 100,000 局分策略数据 | 当前实测固定 32.051%、普通 60.786%、安全 99.994%；需决定主验收策略和正式目标区间 |
 | D-11 | 最终余额的地位 | **已确认**：通关是主目标；最终余额是通关后的次级分数；失败局余额只展示、不参与正式成绩比较 | 见 §5.3 |
 
 ### P2：可后补，不阻塞原型

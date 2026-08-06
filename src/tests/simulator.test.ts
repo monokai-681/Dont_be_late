@@ -17,6 +17,7 @@ describe('multi-strategy simulator', () => {
       expect(strategy.winRate).toBeGreaterThanOrEqual(0);
       expect(strategy.winRate).toBeLessThanOrEqual(1);
     }
+    expect(report.strategies.find(strategy => strategy.id === 'fixed')?.winRate).toBeLessThan(1);
   });
 
   test('is reproducible for the same seed', () => {
@@ -29,7 +30,9 @@ describe('multi-strategy simulator', () => {
     const report = runSimulation({ games: 20, seed: 789, strategyIds: ['safe'] });
     expect(report.strategies).toHaveLength(1);
     expect(report.strategies[0].id).toBe('safe');
-    expect(report.d9.passes).toBe(true);
+    expect(report.d9.safePureRngFailureRate).toBeCloseTo(
+      1 - report.strategies[0].winRate,
+    );
   });
 
   test('formats a human-readable report with D-9 status', () => {

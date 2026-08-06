@@ -6,6 +6,10 @@
  */
 
 export interface BalanceConfig {
+  readonly WORKDAY_DEBT_CARRY: number;
+  readonly WEEKEND_DEBT_DECAY: number;
+  readonly SNOOZE_GRADIENT: number;
+
   readonly SOL_BASE_OVERRIDE: number | null;
   readonly SOL_PILLOW_REDUCTION: number;
   readonly SOL_EYE_MASK_REDUCTION: number;
@@ -40,6 +44,10 @@ export interface BalanceConfig {
 }
 
 export const DEFAULT_BALANCE_CONFIG: Readonly<BalanceConfig> = Object.freeze({
+  WORKDAY_DEBT_CARRY: 0.5,
+  WEEKEND_DEBT_DECAY: 0.5,
+  SNOOZE_GRADIENT: 60,
+
   SOL_BASE_OVERRIDE: null,
   SOL_PILLOW_REDUCTION: -6,
   SOL_EYE_MASK_REDUCTION: -4,

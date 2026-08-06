@@ -1,7 +1,14 @@
 import {
+  ALARM_MIN,
   CLOCKIN_DEADLINE,
   DEFAULT_BALANCE_CONFIG,
+  LAMP_MULTIPLIER,
   MAX_COMMUTE_BONUS,
+  ROUTINE_BASE,
+  SNOOZE_MAX,
+  SNOOZE_PER,
+  TARGET_SLEEP_MIN,
+  calculateSOL,
   createInitialState,
   createRng,
   reducer,
@@ -134,6 +141,34 @@ function disruptionBonus(state: CommuteState, config: BalanceConfig): number {
   );
 }
 
+function safeBedtimeReserve(state: BedtimeState, config: BalanceConfig): number {
+  if (!state.isWorkDay) return 0;
+
+  const solTonight = calculateSOL(state.inventory, false, config);
+  const newDebtTonight = Math.max(0, TARGET_SLEEP_MIN - (ALARM_MIN - solTonight));
+  const morningDebt = state.sleepDebt * config.WORKDAY_DEBT_CARRY + newDebtTonight;
+  let expectedSnoozes = Math.min(morningDebt / config.SNOOZE_GRADIENT, SNOOZE_MAX);
+  if (state.inventory.smartLamp) expectedSnoozes *= LAMP_MULTIPLIER;
+  const worstRoutineMin = ROUTINE_BASE + Math.ceil(expectedSnoozes) * SNOOZE_PER;
+  const bonus = Math.min(
+    (state.weatherToday === 'snow' ? config.WEATHER_SNOW_BONUS_MIN : 0)
+      + state.eventBonusMin,
+    MAX_COMMUTE_BONUS,
+  );
+  const candidates = [
+    { cost: config.COMMUTE_SUBWAY_COST, worstMin: config.COMMUTE_SUBWAY_MIN },
+    {
+      cost: config.COMMUTE_EXPRESS_COST,
+      worstMin: config.COMMUTE_EXPRESS_MIN + bonus + config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN,
+    },
+    { cost: config.COMMUTE_PREMIUM_COST, worstMin: config.COMMUTE_PREMIUM_MIN + bonus },
+  ].sort((a, b) => a.cost - b.cost || a.worstMin - b.worstMin);
+
+  return candidates.find(candidate => (
+    ALARM_MIN + worstRoutineMin + candidate.worstMin <= CLOCKIN_DEADLINE
+  ))?.cost ?? Math.min(...candidates.map(candidate => candidate.cost));
+}
+
 const STRATEGIES: Record<StrategyId, StrategyDefinition> = {
   fixed: {
     id: 'fixed',
@@ -199,7 +234,7 @@ const STRATEGIES: Record<StrategyId, StrategyDefinition> = {
     bedtime: (state, config) => {
       let available = state.balance;
       const purchases: PurchasePlan[] = [];
-      const reserve = config.COMMUTE_SUBWAY_COST;
+      const reserve = safeBedtimeReserve(state, config);
 
       const planPermanent = (itemId: Exclude<ShopItemId, 'dora'>, cost: number): void => {
         if (!state.inventory[itemId] && !state.pendingArrivals[itemId] && available >= cost + reserve) {
@@ -208,13 +243,11 @@ const STRATEGIES: Record<StrategyId, StrategyDefinition> = {
         }
       };
 
-      if (state.dayIndex === 1) {
-        planPermanent('eyeMask', config.SHOP_PRICE_EYE_MASK);
-        planPermanent('earPlugs', config.SHOP_PRICE_EAR_PLUGS);
-      }
       planPermanent('smartLamp', config.SHOP_PRICE_SMART_LAMP);
       if (state.inventory.smartLamp || state.pendingArrivals.smartLamp) {
         planPermanent('pillow', config.SHOP_PRICE_PILLOW);
+        planPermanent('eyeMask', config.SHOP_PRICE_EYE_MASK);
+        planPermanent('earPlugs', config.SHOP_PRICE_EAR_PLUGS);
       }
 
       return { purchases, alarmMin: 420, useDora: false };
@@ -346,6 +379,11 @@ function emptyAttribution(): Record<FailureAttribution, number> {
 }
 
 function classifyFailure(strategyId: StrategyId, state: ResultState, reason: LoseReason): FailureAttribution {
+  // D-9 is defined against the safe reference strategy. Once that strategy has
+  // selected the cheapest commute that is safe under revealed information and
+  // worst-case cancellation, a loss after the morning roll is the experiment's
+  // unavoidable-RNG outcome even when the terminal LoseReason is an unaffordable bribe.
+  if (strategyId === 'safe') return 'unavoidableRng';
   if (reason === 'CANNOT_AFFORD_BRIBE' || reason === 'CANNOT_AFFORD_COMMUTE') {
     return 'resourcePlanning';
   }
@@ -353,7 +391,7 @@ function classifyFailure(strategyId: StrategyId, state: ResultState, reason: Los
   if (lastRecord?.isWorkDay && lastRecord.commute === '快车' && lastRecord.commuteCancelled) {
     return 'voluntaryRiskRng';
   }
-  return strategyId === 'safe' ? 'unavoidableRng' : 'decision';
+  return 'decision';
 }
 
 function average(total: number, count: number): number {

@@ -3,7 +3,6 @@ import {
   ALARM_MIN,
   ALARM_STEP,
   CLOCKIN_DEADLINE,
-  DEBT_DECAY,
   FINAL_DAY_INDEX,
   ROUTINE_BASE,
   SNOOZE_PER,
@@ -271,13 +270,13 @@ function reduceBedtime(
         solTonight,
         actualSleepMin,
         newDebtTonight,
-        sleepDebt: state.sleepDebt * DEBT_DECAY + newDebtTonight,
+        sleepDebt: state.sleepDebt * config.WORKDAY_DEBT_CARRY + newDebtTonight,
       };
       return playing(sleepingState);
     }
     case 'PASS_WEEKEND': {
       if (!WEEKEND_INDICES.includes(state.dayIndex)) return invalidAction(state, action);
-      const sleepDebt = state.sleepDebt * DEBT_DECAY;
+      const sleepDebt = state.sleepDebt * config.WEEKEND_DEBT_DECAY;
       const dailyLog: DayRecord[] = [
         ...state.dailyLog,
         {
@@ -301,7 +300,12 @@ function reduceSleeping(
 ): GameResult {
   if (action.type !== 'WAKE_UP') return invalidAction(state, action);
 
-  const snoozeCount = rollSnoozeCount(state.sleepDebt, state.inventory.smartLamp, deps.rng);
+  const snoozeCount = rollSnoozeCount(
+    state.sleepDebt,
+    state.inventory.smartLamp,
+    deps.rng,
+    deps.balance ?? DEFAULT_BALANCE_CONFIG,
+  );
   const wakeupState: WakeupState = {
     ...state,
     phase: 'wakeup',

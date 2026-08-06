@@ -122,6 +122,40 @@ describe('engine reducer', () => {
     });
   });
 
+  test('workdays carry half the prior debt before adding the new nightly debt', () => {
+    const bedtime: BedtimeState = {
+      ...startGame(),
+      sleepDebt: 100,
+    };
+    const sleeping = dispatch(
+      dispatch(bedtime, { type: 'SET_ALARM', alarmMin: 420 }),
+      { type: 'START_SLEEP' },
+    );
+
+    expect(sleeping.phase).toBe('sleeping');
+    if (sleeping.phase !== 'sleeping') return;
+    expect(sleeping.newDebtTonight).toBe(105);
+    expect(sleeping.sleepDebt).toBe(155);
+  });
+
+  test('debt carry remains injectable for isolated parameter scans', () => {
+    const balance = { ...DEFAULT_BALANCE_CONFIG, WORKDAY_DEBT_CARRY: 1 };
+    const deps: EngineDeps = { rng: () => 0.999999, balance };
+    const bedtime: BedtimeState = {
+      ...startGame(deps),
+      sleepDebt: 100,
+    };
+    const sleeping = dispatch(
+      dispatch(bedtime, { type: 'SET_ALARM', alarmMin: 420 }, deps),
+      { type: 'START_SLEEP' },
+      deps,
+    );
+
+    expect(sleeping.phase).toBe('sleeping');
+    if (sleeping.phase !== 'sleeping') return;
+    expect(sleeping.sleepDebt).toBe(205);
+  });
+
   test.each([
     ['express', '快车'],
     ['premium', '专车'],
@@ -277,35 +311,37 @@ describe('engine reducer', () => {
     )).toThrow(RangeError);
   });
 
-  test('a safe fixed strategy completes Day 1-12 without creating Day 13', () => {
-    let result = reducer(createInitialState(), { type: 'START_GAME' }, safeDeps);
+  test('an isolated low-carry run completes Day 1-12 without creating Day 13', () => {
+    const balance = { ...DEFAULT_BALANCE_CONFIG, WORKDAY_DEBT_CARRY: 0.5 };
+    const deps: EngineDeps = { rng: () => 0.999999, balance };
+    let result = reducer(createInitialState(balance), { type: 'START_GAME' }, deps);
 
     for (let steps = 0; steps < 100 && result.status === 'playing'; steps += 1) {
       const state = result.state;
       switch (state.phase) {
         case 'bedtime':
           if (!state.isWorkDay) {
-            result = reducer(state, { type: 'PASS_WEEKEND' }, safeDeps);
+            result = reducer(state, { type: 'PASS_WEEKEND' }, deps);
           } else if (state.alarmMin === undefined) {
-            result = reducer(state, { type: 'SET_ALARM', alarmMin: 420 }, safeDeps);
+            result = reducer(state, { type: 'SET_ALARM', alarmMin: 420 }, deps);
           } else {
-            result = reducer(state, { type: 'START_SLEEP' }, safeDeps);
+            result = reducer(state, { type: 'START_SLEEP' }, deps);
           }
           break;
         case 'sleeping':
-          result = reducer(state, { type: 'WAKE_UP' }, safeDeps);
+          result = reducer(state, { type: 'WAKE_UP' }, deps);
           break;
         case 'wakeup':
-          result = reducer(state, { type: 'CONTINUE_TO_COMMUTE' }, safeDeps);
+          result = reducer(state, { type: 'CONTINUE_TO_COMMUTE' }, deps);
           break;
         case 'commute':
-          result = reducer(state, { type: 'CHOOSE_COMMUTE', choice: 'subway' }, safeDeps);
+          result = reducer(state, { type: 'CHOOSE_COMMUTE', choice: 'subway' }, deps);
           break;
         case 'office':
-          result = reducer(state, { type: 'CONTINUE_TO_NEXT_DAY' }, safeDeps);
+          result = reducer(state, { type: 'CONTINUE_TO_NEXT_DAY' }, deps);
           break;
         case 'intro':
-          result = reducer(state, { type: 'START_GAME' }, safeDeps);
+          result = reducer(state, { type: 'START_GAME' }, deps);
           break;
         case 'bribe':
           throw new Error('safe strategy unexpectedly arrived late');
@@ -324,7 +360,7 @@ describe('engine reducer', () => {
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     ]);
     expect(result.finalBalance).toBeGreaterThanOrEqual(0);
-    expect(() => reducer(result.state, { type: 'START_GAME' }, safeDeps)).toThrow(InvalidActionError);
+    expect(() => reducer(result.state, { type: 'START_GAME' }, deps)).toThrow(InvalidActionError);
   });
 
   test('calculateArrivalMinutes validates inputs', () => {
