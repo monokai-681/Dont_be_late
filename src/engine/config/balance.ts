@@ -18,6 +18,8 @@ export interface BalanceConfig {
 
   readonly COMMUTE_SUBWAY_MIN: number;
   readonly COMMUTE_SUBWAY_COST: number;
+  readonly COMMUTE_SUBWAY_FAILURE_RATE: number;
+  readonly COMMUTE_SUBWAY_FAILURE_EXTRA_MIN: number;
   readonly COMMUTE_EXPRESS_MIN: number;
   readonly COMMUTE_EXPRESS_COST: number;
   readonly COMMUTE_EXPRESS_CANCEL_RATE: number;
@@ -56,6 +58,8 @@ export const DEFAULT_BALANCE_CONFIG: Readonly<BalanceConfig> = Object.freeze({
 
   COMMUTE_SUBWAY_MIN: 60,
   COMMUTE_SUBWAY_COST: 5,
+  COMMUTE_SUBWAY_FAILURE_RATE: 0.05,
+  COMMUTE_SUBWAY_FAILURE_EXTRA_MIN: 15,
   COMMUTE_EXPRESS_MIN: 25,
   COMMUTE_EXPRESS_COST: 30,
   COMMUTE_EXPRESS_CANCEL_RATE: 0.30,

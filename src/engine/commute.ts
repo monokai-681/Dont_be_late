@@ -7,7 +7,7 @@
  * - 原型阶段移除「开车」选项，只剩 3 档
  * - 快车取消：最多发生 0 或 1 次，**绝不会取消第二次**（重新叫的第二辆必然成功）
  * - 专车：取消率 0%（从不取消），但**不免疫**天气 / 事件加时
- * - 地铁：完全不受天气、事件、取消影响，永远 60 分钟 / 5 元
+ * - 地铁：不受天气、事件影响；5% 信号故障会额外增加 15 分钟
  * ---------------------------------------------------------------
  */
 
@@ -46,7 +46,7 @@ export function calculateCommute(
   // 三档基础参数
   let baseMin: number;
   let baseCost: number;
-  let cancelRate: number;  // 快车 30% / 专车 0% / 地铁 0%
+  let cancelRate: number;  // 快车 30% / 专车 0% / 地铁另算故障
   let immune: boolean;     // 是否免疫天气和事件（地铁免疫）
 
   switch (choice) {
@@ -84,10 +84,15 @@ export function calculateCommute(
   const cancelled = choice === 'express' && rng() < cancelRate;
   const cancelMin = cancelled ? config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN : 0;
 
-  // Step 3: 汇总
+  // Step 3: 地铁故障 roll。地铁仍免疫天气/事件，但不再是零风险。
+  const subwayFailed = choice === 'subway' && rng() < config.COMMUTE_SUBWAY_FAILURE_RATE;
+  const subwayFailureMin = subwayFailed ? config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN : 0;
+
+  // Step 4: 汇总
   return {
-    commuteMin: baseMin + bonusMin + cancelMin,
+    commuteMin: baseMin + bonusMin + cancelMin + subwayFailureMin,
     commuteCost: baseCost,
     cancelled,
+    subwayFailed,
   };
 }

@@ -36,6 +36,7 @@ describe('interactive CLI', () => {
     expect(result.state.dayIndex).toBe(12);
     expect(result.state.dailyLog).toHaveLength(12);
     expect(fixture.output()).toContain('通关！');
+    expect(fixture.output()).toContain('5%故障，额外15分钟');
     expect(fixture.output()).not.toContain('Day 13');
   });
 

@@ -16,15 +16,16 @@ describe('D-8 commute balance', () => {
     let rngCalls = 0;
     const result = calculateCommute('subway', isSnow, eventBonus, () => {
       rngCalls += 1;
-      return 0;
+      return 0.999999;
     });
 
     expect(result).toEqual({
       commuteMin: 60,
       commuteCost: 5,
       cancelled: false,
+      subwayFailed: false,
     });
-    expect(rngCalls).toBe(0);
+    expect(rngCalls).toBe(1);
   });
 
   test('rejects unsupported commute choices at runtime', () => {
@@ -42,6 +43,8 @@ describe('D-8 commute balance', () => {
   test('the immutable default config contains the D-8 subway values', () => {
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_COST).toBe(5);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_FAILURE_RATE).toBe(0.05);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN).toBe(15);
     expect(Object.isFrozen(DEFAULT_BALANCE_CONFIG)).toBe(true);
   });
 
@@ -50,12 +53,14 @@ describe('D-8 commute balance', () => {
       ...DEFAULT_BALANCE_CONFIG,
       COMMUTE_SUBWAY_MIN: 10,
       COMMUTE_SUBWAY_COST: 1,
+      COMMUTE_SUBWAY_FAILURE_RATE: 0,
     };
 
     expect(calculateCommute('subway', false, 0, () => 0, config)).toEqual({
       commuteMin: 10,
       commuteCost: 1,
       cancelled: false,
+      subwayFailed: false,
     });
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
   });
@@ -71,6 +76,7 @@ describe('D-8 commute balance', () => {
       commuteMin: 60,
       commuteCost: 30,
       cancelled: true,
+      subwayFailed: false,
     });
     expect(rngCalls).toBe(1);
   });
@@ -80,11 +86,13 @@ describe('D-8 commute balance', () => {
       commuteMin: 35,
       commuteCost: 30,
       cancelled: true,
+      subwayFailed: false,
     });
     expect(calculateCommute('express', false, 0, () => 0.3)).toEqual({
       commuteMin: 25,
       commuteCost: 30,
       cancelled: false,
+      subwayFailed: false,
     });
   });
 
@@ -118,7 +126,35 @@ describe('D-8 commute balance', () => {
       commuteMin: 50,
       commuteCost: 60,
       cancelled: false,
+      subwayFailed: false,
     });
     expect(rngCalls).toBe(0);
+  });
+
+  test('subway failure threshold adds exactly fifteen minutes', () => {
+    expect(calculateCommute('subway', true, 20, () => 0.049999)).toEqual({
+      commuteMin: 75,
+      commuteCost: 5,
+      cancelled: false,
+      subwayFailed: true,
+    });
+    expect(calculateCommute('subway', true, 20, () => 0.05)).toEqual({
+      commuteMin: 60,
+      commuteCost: 5,
+      cancelled: false,
+      subwayFailed: false,
+    });
+  });
+
+  test('subway failure distribution converges near five percent', () => {
+    const samples = 100_000;
+    const rng = createRng(5);
+    let failures = 0;
+
+    for (let i = 0; i < samples; i += 1) {
+      if (calculateCommute('subway', false, 0, rng).subwayFailed) failures += 1;
+    }
+
+    expect(failures / samples).toBeCloseTo(0.05, 2);
   });
 });

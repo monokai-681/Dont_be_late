@@ -26,6 +26,7 @@ export interface CommuteResult {
   commuteMin: number;
   commuteCost: number;
   cancelled: boolean;
+  subwayFailed: boolean;
 }
 
 export interface Inventory {
@@ -56,6 +57,7 @@ export interface WorkDayRecord extends DayRecordBase {
   snoozeCount: number;
   commute?: string;
   commuteCancelled?: boolean;
+  subwayFailed?: boolean;
   arriveHHMM?: string;
   isLate?: boolean;
 }
@@ -101,6 +103,7 @@ interface CommuteResolutionContext extends WakeContext {
   commuteChoice: CommuteId;
   commuteMin: number;
   commuteCancelled: boolean;
+  subwayFailed: boolean;
   arriveMin: number;
 }
 

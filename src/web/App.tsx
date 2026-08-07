@@ -80,7 +80,7 @@ function RulesDialog({ discovered, onClose, onResetTutorial }: {
         <div className="modal-title"><h2 id="rules-title">规则手册</h2><button onClick={onClose}>关闭</button></div>
         <article><h3>打卡目标</h3><p>在 Day 1～12 中完成 10 个工作日打卡。超过 09:00 到达算迟到。</p></article>
         <article><h3>每天晚上</h3><p>查看预报、购买道具并设置 07:00～10:00 的闹钟。余额不能为负。</p></article>
-        <article><h3>通勤</h3><p>地铁便宜且免疫灾害；快车便宜但可能取消；专车昂贵但不会取消。</p></article>
+        <article><h3>通勤</h3><p>地铁便宜并免疫天气和城市事件，但有 5% 概率故障并额外耗时 15 分钟；快车便宜但可能取消；专车昂贵但不会取消。</p></article>
         {[...discovered].map(id => <article key={id}><h3>{TUTORIALS[id].title}</h3><p>{TUTORIALS[id].body}</p></article>)}
         {locked > 0 && <div className="locked-rules" aria-label={`${locked}项未发现机制`}><strong>▸ 尚有 {locked} 项机制未发现</strong><span>机制触发后会自动加入规则手册</span></div>}
         <footer className="tutorial-settings">
@@ -241,7 +241,7 @@ function WakeupScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { pha
 
 function CommuteScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'commute' }>>) {
   const options = [
-    { id: 'subway' as const, name: '地铁', cost: config.COMMUTE_SUBWAY_COST, time: config.COMMUTE_SUBWAY_MIN, risk: '免疫天气和事件' },
+    { id: 'subway' as const, name: '地铁', cost: config.COMMUTE_SUBWAY_COST, time: config.COMMUTE_SUBWAY_MIN, risk: '免疫天气和事件；5% 故障 +15 分钟' },
     { id: 'express' as const, name: '快车', cost: config.COMMUTE_EXPRESS_COST, time: config.COMMUTE_EXPRESS_MIN, risk: '30% 取消；灾害会加时' },
     { id: 'premium' as const, name: '专车', cost: config.COMMUTE_PREMIUM_COST, time: config.COMMUTE_PREMIUM_MIN, risk: '不取消；灾害仍会加时' },
   ];
@@ -249,9 +249,9 @@ function CommuteScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { ph
 }
 
 function OfficeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'office' }>>) {
-  return <div className="center-screen"><ArtPlaceholder location="公司打卡机" purpose="展示到达公司、打卡结果和当日结算" /><p className="eyebrow">打卡成功</p><h2>{formatClock(state.arriveMin)} · 准时</h2>{state.commuteCancelled && <p>快车取消过一次，重新叫车后到达。</p>}<p>今日结束，余额 ¥{state.balance}</p><button className="primary" onClick={() => act({ type: 'CONTINUE_TO_NEXT_DAY' })}>进入下一天</button></div>;
+  return <div className="center-screen"><ArtPlaceholder location="公司打卡机" purpose="展示到达公司、打卡结果和当日结算" /><p className="eyebrow">打卡成功</p><h2>{formatClock(state.arriveMin)} · 准时</h2>{state.commuteCancelled && <p>快车取消过一次，重新叫车后到达。</p>}{state.subwayFailed && <p>地铁发生信号故障，额外耽误了 15 分钟。</p>}<p>今日结束，余额 ¥{state.balance}</p><button className="primary" onClick={() => act({ type: 'CONTINUE_TO_NEXT_DAY' })}>进入下一天</button></div>;
 }
 
 function BribeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'bribe' }>>) {
-  return <div className="center-screen danger"><ArtPlaceholder location="主管办公室" purpose="首次迟到时揭示补救机制；形成意外与压力" /><p className="eyebrow">迟到 · {formatClock(state.arriveMin)}</p><h2>主管把你叫到一边。</h2><p>支付 ¥{config.BRIBE_COST}，这次迟到可以不计入记录。整局只有一次机会。</p><button className="primary danger-button" disabled={state.balance < config.BRIBE_COST} onClick={() => act({ type: 'CHOOSE_BRIBE' })}>支付 ¥{config.BRIBE_COST}</button><button className="secondary" onClick={() => act({ type: 'DECLINE_BRIBE' })}>拒绝</button></div>;
+  return <div className="center-screen danger"><ArtPlaceholder location="主管办公室" purpose="首次迟到时揭示补救机制；形成意外与压力" /><p className="eyebrow">迟到 · {formatClock(state.arriveMin)}</p><h2>主管把你叫到一边。</h2>{state.commuteCancelled && <p>快车取消过一次，重新叫车后仍然迟到了。</p>}{state.subwayFailed && <p>地铁发生信号故障，额外耽误了 15 分钟。</p>}<p>支付 ¥{config.BRIBE_COST}，这次迟到可以不计入记录。整局只有一次机会。</p><button className="primary danger-button" disabled={state.balance < config.BRIBE_COST} onClick={() => act({ type: 'CHOOSE_BRIBE' })}>支付 ¥{config.BRIBE_COST}</button><button className="secondary" onClick={() => act({ type: 'DECLINE_BRIBE' })}>拒绝</button></div>;
 }

@@ -166,7 +166,7 @@ async function chooseCommute(
   config: BalanceConfig,
 ): Promise<GameResult> {
   io.write(`出门时间：${formatMinutes(state.alarmMin + state.routineMin)}；余额：${state.balance} 元\n`);
-  io.write(`1.地铁 ${config.COMMUTE_SUBWAY_MIN}分钟/${config.COMMUTE_SUBWAY_COST}元（免疫灾害）\n`);
+  io.write(`1.地铁 ${config.COMMUTE_SUBWAY_MIN}分钟/${config.COMMUTE_SUBWAY_COST}元（免疫灾害；${(config.COMMUTE_SUBWAY_FAILURE_RATE * 100).toFixed(0)}%故障，额外${config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN}分钟）\n`);
   io.write(`2.快车 ${config.COMMUTE_EXPRESS_MIN}分钟/${config.COMMUTE_EXPRESS_COST}元（${(config.COMMUTE_EXPRESS_CANCEL_RATE * 100).toFixed(0)}%取消，额外${config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN}分钟）\n`);
   io.write(`3.专车 ${config.COMMUTE_PREMIUM_MIN}分钟/${config.COMMUTE_PREMIUM_COST}元（不取消）\n`);
   const choices = { '1': 'subway', '2': 'express', '3': 'premium' } as const;
@@ -249,12 +249,14 @@ export async function runCli(io: CliIo, options: CliOptions = {}): Promise<GameR
         break;
       case 'office':
         if (state.commuteCancelled) io.write('快车被取消过一次，重新叫车成功。\n');
+        if (state.subwayFailed) io.write(`地铁发生信号故障，额外耽误了 ${config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN} 分钟。\n`);
         io.write(`到达：${formatMinutes(state.arriveMin)}，准时；余额：${state.balance} 元。\n`);
         await io.question('按回车进入下一天：');
         result = reducer(state, { type: 'CONTINUE_TO_NEXT_DAY' }, deps);
         break;
       case 'bribe': {
         if (state.commuteCancelled) io.write('快车被取消过一次，重新叫车成功。\n');
+        if (state.subwayFailed) io.write(`地铁发生信号故障，额外耽误了 ${config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN} 分钟。\n`);
         io.write(`到达：${formatMinutes(state.arriveMin)}，迟到。余额：${state.balance} 元。\n`);
         const accept = (await io.question(`支付 ${config.BRIBE_COST} 元补救？(y/N)：`)).trim().toLowerCase();
         result = reducer(

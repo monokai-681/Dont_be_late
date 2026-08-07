@@ -181,6 +181,7 @@ function workDayRecord(state: WorkDayProgress): WorkDayRecord {
   if ('commuteChoice' in state) {
     record.commute = commuteName(state.commuteChoice);
     record.commuteCancelled = state.commuteCancelled;
+    record.subwayFailed = state.subwayFailed;
     record.arriveHHMM = formatClock(state.arriveMin);
     record.isLate = state.isLate;
   }
@@ -352,6 +353,7 @@ function reduceCommute(
     commuteChoice: action.choice,
     commuteMin: commute.commuteMin,
     commuteCancelled: commute.cancelled,
+    subwayFailed: commute.subwayFailed,
     arriveMin,
   };
 

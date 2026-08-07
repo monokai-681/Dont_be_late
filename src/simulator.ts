@@ -156,7 +156,10 @@ function safeBedtimeReserve(state: BedtimeState, config: BalanceConfig): number 
     MAX_COMMUTE_BONUS,
   );
   const candidates = [
-    { cost: config.COMMUTE_SUBWAY_COST, worstMin: config.COMMUTE_SUBWAY_MIN },
+    {
+      cost: config.COMMUTE_SUBWAY_COST,
+      worstMin: config.COMMUTE_SUBWAY_MIN + config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN,
+    },
     {
       cost: config.COMMUTE_EXPRESS_COST,
       worstMin: config.COMMUTE_EXPRESS_MIN + bonus + config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN,
@@ -258,7 +261,7 @@ const STRATEGIES: Record<StrategyId, StrategyDefinition> = {
         {
           choice: 'subway' as const,
           cost: config.COMMUTE_SUBWAY_COST,
-          worstMin: config.COMMUTE_SUBWAY_MIN,
+          worstMin: config.COMMUTE_SUBWAY_MIN + config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN,
         },
         {
           choice: 'express' as const,
@@ -384,12 +387,18 @@ function classifyFailure(strategyId: StrategyId, state: ResultState, reason: Los
   // worst-case cancellation, a loss after the morning roll is the experiment's
   // unavoidable-RNG outcome even when the terminal LoseReason is an unaffordable bribe.
   if (strategyId === 'safe') return 'unavoidableRng';
+  const lastRecord = state.dailyLog[state.dailyLog.length - 1];
+  if (
+    lastRecord?.isWorkDay
+    && (
+      (lastRecord.commute === '快车' && lastRecord.commuteCancelled)
+      || (lastRecord.commute === '地铁' && lastRecord.subwayFailed)
+    )
+  ) {
+    return 'voluntaryRiskRng';
+  }
   if (reason === 'CANNOT_AFFORD_BRIBE' || reason === 'CANNOT_AFFORD_COMMUTE') {
     return 'resourcePlanning';
-  }
-  const lastRecord = state.dailyLog[state.dailyLog.length - 1];
-  if (lastRecord?.isWorkDay && lastRecord.commute === '快车' && lastRecord.commuteCancelled) {
-    return 'voluntaryRiskRng';
   }
   return 'decision';
 }
