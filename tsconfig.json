@@ -21,5 +21,5 @@
     "types": ["node", "jest"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prototype-*"]
+  "exclude": ["node_modules", "dist", "prototype-*", "src/web/**/*.tsx"]
 }

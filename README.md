@@ -12,7 +12,8 @@
 - Phase 1-3（shop + reducer 状态机）已完成。
 - Phase 1-4（固定 / 普通自适应 / 安全参考三策略模拟器）已完成。
 - Phase 2（命令行可交互版）已完成。
-- 基础函数、商店、完整引擎、模拟器和 CLI 回归测试已实现；Web UI 尚未实现。
+- Phase 3 Web UI 已进入功能原型阶段：React/Vite 骨架、全部 Screen、渐进教学、规则手册和移动端状态栏已实现。
+- 基础函数、商店、完整引擎、模拟器、CLI 和 Web 展示模型均有回归测试；Web 真实试玩和视觉细化仍在进行。
 
 当前引擎已经可以从 Day 1 完整运行到 Day 12，并通过 TypeScript 编译和整局回归测试。D-8 第二轮参数已经完成 100,000 局正式验证；下一项设计决策是 D-10 的主验收策略与目标通关率区间。
 
@@ -61,12 +62,13 @@ npm run sim -- 1000
 npm run sim:10k
 npm run cli
 npm run cli -- my-seed
+npm run dev
 ```
 
 `npm run cli -- my-seed` 可用指定 seed 重玩同一随机局；省略 seed 时自动生成。
 
-Node.js 要求：20 或更高版本。
+Node.js 要求：20.19 或更高版本。
 
 ## 当前开发状态
 
-takeover、Phase 1 核心引擎和 Phase 2 CLI 均已完成。D-8 第二轮采用 `SNOOZE_GRADIENT=60`，工作日与周末每日债务结转均为 `0.5`，其余时间参数不变。默认 seed `20260807`、每种策略 100,000 局的结果为：固定 07:00 地铁 32.05%，普通自适应 60.79%，安全参考 99.994%；D-9 安全策略纯 RNG 失败率 0.006%，符合 `<25%`。D-10 暂不继续追求特定纯 RNG 失败率，正式目标区间留待真实试玩校准；下一开发阶段为 Web UI。
+takeover、Phase 1 核心引擎和 Phase 2 CLI 均已完成，Phase 3 Web UI 正在进行。Web 原型采用 React＋Vite＋TypeScript，不生成图片资源；所有美术位置使用标注用途和比例的占位组件，等待统一像素画替换。D-8 第二轮采用 `SNOOZE_GRADIENT=60`，工作日与周末每日债务结转均为 `0.5`；D-10 留待真实试玩校准。
