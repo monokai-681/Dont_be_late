@@ -1,4 +1,5 @@
 import { runCli, type CliIo } from '../cli';
+import { COPY } from '../content/zh-CN';
 
 function scriptedIo(answers: string[]): { io: CliIo; output: () => string } {
   const remaining = [...answers];
@@ -37,6 +38,7 @@ describe('interactive CLI', () => {
     expect(result.state.dailyLog).toHaveLength(12);
     expect(fixture.output()).toContain('通关！');
     expect(fixture.output()).toContain('5%故障，额外15分钟');
+    expect(fixture.output()).toContain('昨晚 00:45 入睡');
     expect(fixture.output()).not.toContain('Day 13');
   });
 
@@ -55,7 +57,7 @@ describe('interactive CLI', () => {
     if (result.status !== 'lose') return;
     expect(result.reason).toBe('REFUSED_BRIBE');
     expect(fixture.output()).toContain('闹钟必须在 07:00～10:00 之间');
-    expect(fixture.output()).toContain('你拒绝了唯一一次补救机会');
+    expect(fixture.output()).toContain(COPY.loseReasons.REFUSED_BRIBE);
   });
 
   test('reports invalid shop input and a rejected unaffordable purchase', async () => {
