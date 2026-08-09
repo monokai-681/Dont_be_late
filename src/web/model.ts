@@ -11,10 +11,25 @@ export const WORKDAY_NUMBER: Record<number, number> = {
   1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 8: 6, 9: 7, 10: 8, 11: 9, 12: 10,
 };
 
+export function weekAndWeekday(dayIndex: number): string {
+  return `第${dayIndex <= 7 ? '一' : '二'}周·${WEEKDAYS[dayIndex]}`;
+}
+
+export function statusDayLabel(dayIndex: number): string {
+  const completedWorkdays = dayIndex <= 5 ? dayIndex : dayIndex <= 7 ? 5 : dayIndex - 2;
+  return `${WEEKDAYS[dayIndex]} ${completedWorkdays}/10`;
+}
+
 export function formatClock(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+export function formatDuration(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours} 小时 ${minutes} 分钟`;
 }
 
 export function currentTime(state: GameState): string {

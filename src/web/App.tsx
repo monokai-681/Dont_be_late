@@ -1,21 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ALARM_MAX,
   ALARM_MIN,
+  ALARM_STEP,
+  CLOCKIN_DEADLINE,
   DEFAULT_BALANCE_CONFIG,
+  ROUTINE_BASE,
+  SNOOZE_PER,
   createInitialState,
   createRngFromString,
   reducer,
   type Action,
   type ActiveGameState,
+  type CommuteId,
   type GameResult,
   type ShopItemId,
 } from '../engine';
 import {
   discoveriesForState,
-  currentTime,
   formatClock,
-  progressText,
-  WEEKDAYS,
+  formatDuration,
+  statusDayLabel,
+  weekAndWeekday,
   type MechanicId,
 } from './model';
 import {
@@ -31,29 +37,18 @@ const config = DEFAULT_BALANCE_CONFIG;
 
 const TUTORIALS = COPY.tutorials;
 
-const SHOP: Array<{ id: ShopItemId; name: string; price: number; note: string }> = [
+const SHOP: Array<{ id: ShopItemId; name: string; price: number; note: string; delivery?: string }> = [
+  { id: 'dora', name: COPY.items.dora, price: config.SHOP_PRICE_DORA_PER_PILL, delivery: COPY.shop.doraDelivery, note: COPY.shop.dora },
   { id: 'pillow', name: COPY.items.pillow, price: config.SHOP_PRICE_PILLOW, note: COPY.shop.pillow },
   { id: 'eyeMask', name: COPY.items.eyeMask, price: config.SHOP_PRICE_EYE_MASK, note: COPY.shop.eyeMask },
   { id: 'earPlugs', name: COPY.items.earPlugs, price: config.SHOP_PRICE_EAR_PLUGS, note: COPY.shop.earPlugs },
-  { id: 'dora', name: COPY.items.dora, price: config.SHOP_PRICE_DORA_PER_PILL, note: COPY.shop.dora },
   { id: 'smartLamp', name: COPY.items.smartLamp, price: config.SHOP_PRICE_SMART_LAMP, note: COPY.shop.smartLamp },
 ];
-
-function ArtPlaceholder({ location, purpose, ratio = '4:3' }: { location: string; purpose: string; ratio?: string }) {
-  return (
-    <div className="art-placeholder" role="img" aria-label={`美术占位：${location}`}>
-      <strong>美术占位 · {location}</strong>
-      <span>功能：{purpose}</span>
-      <small>建议比例：{ratio} · 后续替换像素画</small>
-    </div>
-  );
-}
 
 function StatusBar({ state, onRules }: { state: ActiveGameState; onRules: () => void }) {
   return (
     <header className="status-bar">
-      <div><small>{COPY.web.status.time}</small><strong>{WEEKDAYS[state.dayIndex]} · {currentTime(state)}</strong></div>
-      <div><small>{COPY.web.status.progress}</small><strong>{progressText(state)}</strong></div>
+      <div className="status-day"><strong>{statusDayLabel(state.dayIndex)}</strong></div>
       <div><small>{COPY.web.status.debt}</small><strong>{Math.round(state.sleepDebt)} 分</strong></div>
       <div><small>{COPY.web.status.balance}</small><strong>¥{state.balance}</strong></div>
       <button className="icon-button" onClick={onRules} aria-label={COPY.web.status.rulesAria}>{COPY.web.status.rules}</button>
@@ -104,6 +99,10 @@ export function App() {
   const [tutorialSeen, setTutorialSeen] = useState<Set<MechanicId>>(() => loadTutorialSeen());
   const [tutorial, setTutorial] = useState<MechanicId | null>(null);
 
+  useEffect(() => {
+    window.scrollTo({ left: 0, top: 0 });
+  }, []);
+
   const state = result.state;
 
   useEffect(() => {
@@ -152,9 +151,8 @@ export function App() {
 
   if (state.phase === 'intro') {
     return <main className="intro-shell"><section className="intro-card">
-      <ArtPlaceholder location="主菜单 / 年末城市夜景" purpose="建立深夜通勤氛围与游戏标题背景" ratio="16:9" />
-      <p className="eyebrow">{COPY.web.intro.eyebrow}</p><h1>{COPY.web.intro.title}</h1>
-      <p>{COPY.web.intro.body}</p>
+      <h1>{COPY.web.intro.title}</h1>
+      <p className="intro-description">{COPY.web.intro.body}</p>
       <button className="primary" onClick={() => act({ type: 'START_GAME' })}>{COPY.web.intro.start}</button>
       <button className="secondary" onClick={() => setRulesOpen(true)}>{COPY.web.intro.rules}</button>
       <small>{COPY.web.intro.seed(seed)}</small>
@@ -163,7 +161,6 @@ export function App() {
 
   if (result.status === 'win' || result.status === 'lose') {
     return <main className="result-shell"><section className="result-card">
-      <ArtPlaceholder location="结算场景" purpose="根据通关或失败表现最终情绪" ratio="16:9" />
       <p className="eyebrow">{result.status === 'win' ? COPY.web.result.winEyebrow : COPY.web.result.lossEyebrow(state.dayIndex)}</p>
       <h1>{result.status === 'win' ? COPY.web.result.winTitle : COPY.web.result.lossTitle}</h1>
       <p>{COPY.web.result.balance} <strong>¥{state.balance}</strong></p>
@@ -178,8 +175,6 @@ export function App() {
     {message && <div className="toast" role="alert">{message}</div>}
     <section className="screen-card">
       {active.phase === 'bedtime' && <BedtimeScreen state={active} act={act} />}
-      {active.phase === 'sleeping' && <SleepingScreen state={active} act={act} />}
-      {active.phase === 'wakeup' && <WakeupScreen state={active} act={act} />}
       {active.phase === 'commute' && <CommuteScreen state={active} act={act} />}
       {active.phase === 'office' && <OfficeScreen state={active} act={act} />}
       {active.phase === 'bribe' && <BribeScreen state={active} act={act} />}
@@ -194,45 +189,101 @@ type ScreenProps<T extends ActiveGameState> = {
   act: (action: Action | readonly Action[]) => GameResult;
 };
 
+function CommuteConditions({
+  title,
+  weather,
+  event,
+}: {
+  title: string;
+  weather: Extract<ActiveGameState, { phase: 'bedtime' }>['weatherToday'];
+  event: Extract<ActiveGameState, { phase: 'bedtime' }>['eventToday'];
+}) {
+  return <section className="commute-conditions" aria-label={title}>
+    <h3>{title}</h3>
+    <div className="info-pair">
+      <div><small>{COPY.web.bedtime.forecastWeather}</small><strong>{weather === 'snow' ? COPY.web.bedtime.snow : COPY.web.bedtime.clear}</strong></div>
+      <div><small>{COPY.web.bedtime.forecastEvent}</small><strong>{COPY.events.name(event)}</strong></div>
+    </div>
+  </section>;
+}
+
 function BedtimeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'bedtime' }>>) {
   const [alarm, setAlarm] = useState(state.alarmMin ?? ALARM_MIN);
+  const [cart, setCart] = useState<Set<ShopItemId>>(() => new Set());
+  const alarmHour = Math.floor(alarm / 60);
+  const alarmMinute = alarm % 60;
+  const alarmHours = Array.from({ length: ALARM_MAX / 60 - ALARM_MIN / 60 + 1 }, (_, index) => ALARM_MIN / 60 + index);
+  const alarmMinutes = Array.from({ length: 60 / ALARM_STEP }, (_, index) => index * ALARM_STEP).filter(minute => alarmHour < ALARM_MAX / 60 || minute === 0);
+  const setAlarmHour = (hour: number) => setAlarm(hour * 60 + (hour === ALARM_MAX / 60 ? 0 : alarmMinute));
+  const setAlarmMinute = (minute: number) => setAlarm(alarmHour * 60 + minute);
   const permanentOwned = (id: ShopItemId) => id !== 'dora' && state.inventory[id];
   const pending = (id: ShopItemId) => id !== 'dora' && state.pendingArrivals[id];
-  return <>
-    <div className="screen-heading"><div><p className="eyebrow">Day {state.dayIndex} · {state.isWorkDay ? COPY.web.bedtime.workday : COPY.web.bedtime.weekend}</p><h2>{state.isWorkDay ? COPY.web.bedtime.workdayTitle : COPY.web.bedtime.weekendTitle}</h2></div><div className="forecast"><span>{state.weatherToday === 'snow' ? COPY.web.bedtime.snow : COPY.web.bedtime.clear}</span><span>{COPY.events.name(state.eventToday)}</span></div></div>
-    <ArtPlaceholder location="卧室夜景" purpose="承载睡前、商店和闹钟设置的主场景" />
-    <h3>{COPY.web.bedtime.shop}</h3><div className="shop-grid">{SHOP.map(item => <button key={item.id} className="shop-item" disabled={permanentOwned(item.id) || pending(item.id)} onClick={() => act({ type: 'BUY_ITEM', itemId: item.id })}><strong>{item.name}<span>¥{item.price}</span></strong><small>{permanentOwned(item.id) ? COPY.web.bedtime.owned : pending(item.id) ? COPY.web.bedtime.pending : item.note}</small></button>)}</div>
-    {state.isWorkDay ? <div className="alarm-panel"><label htmlFor="alarm">{COPY.web.bedtime.alarm} <strong>{formatClock(alarm)}</strong></label><input id="alarm" type="range" min="420" max="600" step="5" value={alarm} onChange={event => setAlarm(Number(event.target.value))} />
+  const cartItems = SHOP.filter(item => cart.has(item.id));
+  const cartTotal = cartItems.reduce((total, item) => total + item.price, 0);
+  const cartOverBudget = cartTotal > state.balance;
+  const toggleCartItem = (itemId: ShopItemId) => setCart(previous => {
+    const next = new Set(previous);
+    if (next.has(itemId)) next.delete(itemId);
+    else next.add(itemId);
+    return next;
+  });
+  const confirmCart = () => {
+    if (cartItems.length === 0 || cartOverBudget) return;
+    const next = act(cartItems.map(item => ({ type: 'BUY_ITEM' as const, itemId: item.id })));
+    if (next.status === 'playing') setCart(new Set());
+  };
+  const cartPending = cart.size > 0;
+  return <div className="page-layout bedtime-page">
+    <header className="screen-heading"><div><p className="eyebrow">{weekAndWeekday(state.dayIndex)}</p><h2>{state.isWorkDay ? COPY.web.bedtime.workday : COPY.web.bedtime.weekendTitle}</h2></div></header>
+    {state.isWorkDay && <CommuteConditions title={COPY.web.bedtime.conditionsTitle} weather={state.weatherToday} event={state.eventToday} />}
+    <section className="shop-section"><div className="shop-heading"><h3>{COPY.web.bedtime.shop}</h3><small>{COPY.web.bedtime.shopHint}</small></div><div className="shop-grid">{SHOP.map(item => {
+      const unavailable = permanentOwned(item.id) || pending(item.id);
+      const selected = cart.has(item.id);
+      return <button key={item.id} className={`shop-item${item.id === 'dora' ? ' dora-item' : ''}${selected ? ' selected' : ''}`} aria-pressed={selected} disabled={unavailable} onClick={() => toggleCartItem(item.id)}><span className="shop-copy"><strong>{item.name}</strong><small>{permanentOwned(item.id) ? COPY.web.bedtime.owned : pending(item.id) ? COPY.web.bedtime.pending : selected ? COPY.web.bedtime.selected : item.delivery ? <><b>{item.delivery}</b>；{item.note}</> : item.note}</small></span><span className="shop-price">¥{item.price}</span></button>;
+    })}</div></section>
+    {cartItems.length > 0 && <section className="cart-panel" aria-label={COPY.web.bedtime.cart}><div className="cart-heading"><h3>{COPY.web.bedtime.cart}</h3><strong>{COPY.web.bedtime.cartTotal} ¥{cartTotal}</strong></div><div className="cart-items">{cartItems.map(item => <button key={item.id} onClick={() => toggleCartItem(item.id)} aria-label={COPY.web.bedtime.removeFromCart(item.name)}>{item.name}<span>¥{item.price}</span></button>)}</div><p className="cart-balance">{COPY.web.bedtime.cartEstimatedBalance(state.balance - cartTotal)}</p>{cartOverBudget && <p className="cart-warning">{COPY.web.bedtime.cartOverBudget}</p>}<button className="primary cart-confirm" disabled={cartOverBudget} onClick={confirmCart}>{COPY.web.bedtime.confirmCart(cartTotal)}</button></section>}
+    {state.isWorkDay ? <div className="alarm-panel"><div className="alarm-row"><span className="alarm-label">{COPY.web.bedtime.alarm}</span><div className="alarm-wheels" aria-label="设置闹钟时间"><TimeWheel label="时" value={alarmHour} options={alarmHours} format={value => String(value).padStart(2, '0')} onChange={setAlarmHour} /><span className="alarm-separator" aria-hidden="true">:</span><TimeWheel label="分" value={alarmMinute} options={alarmMinutes} format={value => String(value).padStart(2, '0')} onChange={setAlarmMinute} /></div></div>
       {state.inventory.dora > 0 && !state.doraUsedTonight && <button className="secondary" onClick={() => act({ type: 'USE_DORA_TONIGHT' })}>{COPY.web.bedtime.useDora(state.inventory.dora)}</button>}
-      <button className="primary" onClick={() => act([
+      <button className="primary" disabled={cartPending} onClick={() => act([
         { type: 'SET_ALARM', alarmMin: alarm },
         { type: 'START_SLEEP' },
-      ])}>{COPY.web.bedtime.sleep}</button></div>
-      : <button className="primary" onClick={() => act({ type: 'PASS_WEEKEND' })}>{COPY.web.bedtime.rest}</button>}
-  </>;
+        { type: 'WAKE_UP' },
+        { type: 'CONTINUE_TO_COMMUTE' },
+      ])}>{cartPending ? COPY.web.bedtime.resolveCart : COPY.web.bedtime.sleep}</button></div>
+      : <button className="primary bedtime-rest" disabled={cartPending} onClick={() => act({ type: 'PASS_WEEKEND' })}>{cartPending ? COPY.web.bedtime.resolveCart : COPY.web.bedtime.rest}</button>}
+  </div>;
 }
 
-function SleepingScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'sleeping' }>>) {
-  return <div className="center-screen"><ArtPlaceholder location="睡眠过渡" purpose="表现时间流逝、入睡等待与夜色变化" ratio="16:9" /><p className="eyebrow">SOL {state.solTonight} 分钟</p><h2>{COPY.web.sleeping.alarm(formatClock(state.alarmMin))}</h2><p>{COPY.web.sleeping.sleepSummary(formatClock(state.solTonight), Math.floor(state.actualSleepMin / 60), state.actualSleepMin % 60)}</p><button className="primary" onClick={() => act({ type: 'WAKE_UP' })}>{COPY.web.sleeping.wake}</button></div>;
-}
-
-function WakeupScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'wakeup' }>>) {
-  return <div className="center-screen"><ArtPlaceholder location="起床 / 闹钟" purpose="表现 snooze 次数和清晨状态" /><p className="eyebrow">{COPY.web.wakeup.now} {currentTime(state)}</p><h2>{COPY.web.wakeup.snooze(state.snoozeCount)}</h2><div className="metric-row"><div><small>{COPY.web.wakeup.debt}</small><strong>{Math.round(state.sleepDebt)} 分</strong></div><div><small>{COPY.web.wakeup.routine}</small><strong>{state.routineMin} 分</strong></div><div><small>{COPY.web.wakeup.leaveAt}</small><strong>{formatClock(state.alarmMin + state.routineMin)}</strong></div></div><button className="primary" onClick={() => act({ type: 'CONTINUE_TO_COMMUTE' })}>{COPY.web.wakeup.continue}</button></div>;
+function TimeWheel({ label, value, options, format, onChange }: { label: string; value: number; options: number[]; format: (value: number) => string; onChange: (value: number) => void }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const index = options.indexOf(value);
+    if (index >= 0 && viewportRef.current) viewportRef.current.scrollTop = index * 40;
+  }, [options, value]);
+  return <div className="time-wheel"><div ref={viewportRef} className="time-wheel-viewport" role="listbox" aria-label={`选择${label}`} onScroll={event => {
+    const index = Math.max(0, Math.min(options.length - 1, Math.round(event.currentTarget.scrollTop / 40)));
+    if (options[index] !== value) onChange(options[index]);
+  }}><div className="time-wheel-list">{options.map(option => <button key={option} type="button" role="option" aria-selected={option === value} className={option === value ? 'selected' : ''} onClick={() => onChange(option)}>{format(option)}</button>)}</div></div></div>;
 }
 
 function CommuteScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'commute' }>>) {
+  const [selected, setSelected] = useState<CommuteId | null>(null);
+  const now = state.alarmMin + state.routineMin;
+  const remaining = CLOCKIN_DEADLINE - now;
+  const snoozeMinutes = state.snoozeCount * SNOOZE_PER;
   const options = [
     { id: 'subway' as const, name: COPY.web.commute.subway, cost: config.COMMUTE_SUBWAY_COST, time: config.COMMUTE_SUBWAY_MIN, risk: COPY.web.commute.subwayRisk },
     { id: 'express' as const, name: COPY.web.commute.express, cost: config.COMMUTE_EXPRESS_COST, time: config.COMMUTE_EXPRESS_MIN, risk: COPY.web.commute.expressRisk },
     { id: 'premium' as const, name: COPY.web.commute.premium, cost: config.COMMUTE_PREMIUM_COST, time: config.COMMUTE_PREMIUM_MIN, risk: COPY.web.commute.premiumRisk },
   ];
-  return <><div className="screen-heading"><div><p className="eyebrow">{COPY.web.commute.leave} · {currentTime(state)}</p><h2>{COPY.web.commute.title}</h2></div><div className="deadline">09:00<br/><small>{COPY.web.commute.deadline}</small></div></div><ArtPlaceholder location="城市通勤" purpose="根据天气与所选交通方式展示通勤场景" ratio="16:9" /><div className="commute-grid">{options.map(option => <button key={option.id} disabled={state.balance < option.cost} onClick={() => act({ type: 'CHOOSE_COMMUTE', choice: option.id })}><strong>{option.name}<span>¥{option.cost}</span></strong><b>{option.time} 分钟</b><small>{option.risk}</small></button>)}</div></>;
+  const selectedName = options.find(option => option.id === selected)?.name;
+  return <div className="page-layout commute-page"><header className="screen-heading"><h2>{COPY.web.commute.title}</h2></header><div className="info-pair"><div><small>{COPY.web.commute.now}</small><strong>{formatClock(now)}</strong></div><div><small>{COPY.web.commute.deadline}</small><strong>{COPY.web.commute.minutesToDeadline(remaining)}</strong></div></div><CommuteConditions title={COPY.web.commute.conditionsTitle} weather={state.weatherToday} event={state.eventToday} /><section className="morning-story" aria-label={COPY.web.commute.morningSummary}><p>{COPY.web.commute.sleepSummary(formatClock(state.solTonight), formatDuration(state.actualSleepMin), formatClock(state.alarmMin))}</p><p>{COPY.web.commute.snoozeSummary(state.snoozeCount, snoozeMinutes)}</p><p>{COPY.web.commute.routineSummary(ROUTINE_BASE)}</p></section><div className="commute-actions"><div className="commute-grid">{options.map(option => <button key={option.id} className={selected === option.id ? 'selected' : ''} aria-pressed={selected === option.id} disabled={state.balance < option.cost} onClick={() => setSelected(option.id)}><strong>{option.name}<span>¥{option.cost}</span></strong><b>{option.time} 分钟</b><small>{option.risk}</small></button>)}</div><button className="primary commute-confirm" disabled={!selected} onClick={() => selected && act({ type: 'CHOOSE_COMMUTE', choice: selected })}>{selectedName ? COPY.web.commute.confirm(selectedName) : COPY.web.commute.choosePrompt}</button></div></div>;
 }
 
 function OfficeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'office' }>>) {
-  return <div className="center-screen"><ArtPlaceholder location="公司打卡机" purpose="展示到达公司、打卡结果和当日结算" /><p className="eyebrow">{COPY.web.office.success}</p><h2>{COPY.web.office.onTime(formatClock(state.arriveMin))}</h2>{state.commuteCancelled && <p>{COPY.web.office.expressCancelled}</p>}{state.subwayFailed && <p>{COPY.web.office.subwayFailed}</p>}<p>{COPY.web.office.end(state.balance)}</p><button className="primary" onClick={() => act({ type: 'CONTINUE_TO_NEXT_DAY' })}>{COPY.web.office.next}</button></div>;
+  return <div className="center-screen outcome-page"><p className="eyebrow">{COPY.web.office.success}</p><h2>{COPY.web.office.onTime(formatClock(state.arriveMin))}</h2>{state.commuteCancelled && <p>{COPY.web.office.expressCancelled}</p>}{state.subwayFailed && <p>{COPY.web.office.subwayFailed}</p>}<p>{COPY.web.office.end(state.balance)}</p><button className="primary" onClick={() => act({ type: 'CONTINUE_TO_NEXT_DAY' })}>{COPY.web.office.next}</button></div>;
 }
 
 function BribeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'bribe' }>>) {
-  return <div className="center-screen danger"><ArtPlaceholder location="主管办公室" purpose="首次迟到时揭示补救机制；形成意外与压力" /><p className="eyebrow">{COPY.web.bribe.late(formatClock(state.arriveMin))}</p><h2>{COPY.web.bribe.title}</h2>{state.commuteCancelled && <p>{COPY.web.bribe.expressCancelled}</p>}{state.subwayFailed && <p>{COPY.web.bribe.subwayFailed}</p>}<p>{COPY.web.bribe.body(config.BRIBE_COST)}</p><button className="primary danger-button" disabled={state.balance < config.BRIBE_COST} onClick={() => act({ type: 'CHOOSE_BRIBE' })}>{COPY.web.bribe.pay(config.BRIBE_COST)}</button><button className="secondary" onClick={() => act({ type: 'DECLINE_BRIBE' })}>{COPY.web.bribe.decline}</button></div>;
+  return <div className="center-screen outcome-page danger"><p className="eyebrow">{COPY.web.bribe.late(formatClock(state.arriveMin))}</p><h2>{COPY.web.bribe.title}</h2>{state.commuteCancelled && <p>{COPY.web.bribe.expressCancelled}</p>}{state.subwayFailed && <p>{COPY.web.bribe.subwayFailed}</p>}<p>{COPY.web.bribe.body(config.BRIBE_COST)}</p><button className="primary danger-button" disabled={state.balance < config.BRIBE_COST} onClick={() => act({ type: 'CHOOSE_BRIBE' })}>{COPY.web.bribe.pay(config.BRIBE_COST)}</button><button className="secondary" onClick={() => act({ type: 'DECLINE_BRIBE' })}>{COPY.web.bribe.decline}</button></div>;
 }

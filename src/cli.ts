@@ -184,7 +184,7 @@ export async function runCli(io: CliIo, options: CliOptions = {}): Promise<GameR
         break;
       case 'bedtime': {
         io.write(`\n=== Day ${state.dayIndex}${state.isWorkDay ? ' 工作日' : ' 周末'} ===\n`);
-        io.write(`天气：${state.weatherToday === 'snow' ? COPY.cli.snow : COPY.cli.clear}；事件：${COPY.events.name(state.eventToday, COPY.cli.eventEmpty)}\n`);
+        io.write(`天气：${state.weatherToday === 'snow' ? COPY.cli.snow : COPY.cli.clear}；交通：${COPY.events.name(state.eventToday, COPY.cli.eventEmpty)}\n`);
         let bedtime = await visitShop(state, io, deps, config);
         if (!bedtime.isWorkDay) {
           await io.question(COPY.cli.restPrompt);

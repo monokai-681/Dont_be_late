@@ -98,12 +98,12 @@ describe('D-8 snooze balance', () => {
     },
   );
 
-  test('07:00 plus subway is on time for 0-3 snoozes and late for 4-6', () => {
+  test('06:00 plus subway remains on time across the six-snooze cap', () => {
     const subwayMin = 60;
 
     for (let count = 0; count <= SNOOZE_MAX; count += 1) {
       const arrival = ALARM_MIN + ROUTINE_BASE + count * SNOOZE_PER + subwayMin;
-      expect(arrival <= CLOCKIN_DEADLINE).toBe(count <= 3);
+      expect(arrival <= CLOCKIN_DEADLINE).toBe(true);
     }
   });
 });

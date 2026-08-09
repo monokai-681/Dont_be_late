@@ -13,7 +13,7 @@
 export const BEDTIME_MIN: number        = 0;     // 每个 Day 循环的固定时间起点
 export const CLOCKIN_DEADLINE: number   = 540;   // 09:00 — 超过算「迟到」
 export const TARGET_SLEEP_MIN: number   = 480;   // 8 小时 — 每晚「睡饱了」的目标
-export const ALARM_MIN: number          = 420;   // 07:00 — 闹钟最早设置时间
+export const ALARM_MIN: number          = 360;   // 06:00 — 闹钟最早设置时间
 export const ALARM_MAX: number          = 600;   // 10:00 — 闹钟最晚设置时间
 export const ALARM_STEP: number         = 5;     // 闹钟调节步长（与所有时间粒度一致）
 

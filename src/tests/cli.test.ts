@@ -56,7 +56,7 @@ describe('interactive CLI', () => {
     expect(result.status).toBe('lose');
     if (result.status !== 'lose') return;
     expect(result.reason).toBe('REFUSED_BRIBE');
-    expect(fixture.output()).toContain('闹钟必须在 07:00～10:00 之间');
+    expect(fixture.output()).toContain('闹钟必须在 06:00～10:00 之间');
     expect(fixture.output()).toContain(COPY.loseReasons.REFUSED_BRIBE);
   });
 
