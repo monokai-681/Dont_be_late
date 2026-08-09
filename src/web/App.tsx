@@ -82,8 +82,8 @@ function RulesDialog({ discovered, onClose, onResetTutorial }: {
 
 function TutorialCard({ id, onDismiss }: { id: MechanicId; onDismiss: () => void }) {
   return (
-    <aside className="tutorial-card" role="status">
-      <span>{COPY.web.tutorialCard.eyebrow}</span><h3>{TUTORIALS[id].title}</h3><p>{TUTORIALS[id].body}</p>
+    <aside className="tutorial-card" role="dialog" aria-modal="true" aria-labelledby={`tutorial-${id}-title`}>
+      <span>{COPY.web.tutorialCard.eyebrow}</span><h3 id={`tutorial-${id}-title`}>{TUTORIALS[id].title}</h3><p>{TUTORIALS[id].body}</p>
       <button onClick={onDismiss}>{COPY.web.tutorialCard.dismiss}</button>
     </aside>
   );
@@ -179,7 +179,7 @@ export function App() {
       {active.phase === 'office' && <OfficeScreen state={active} act={act} />}
       {active.phase === 'bribe' && <BribeScreen state={active} act={act} />}
     </section>
-    {tutorial && <TutorialCard id={tutorial} onDismiss={dismissTutorial} />}
+    {tutorial && <><div className="tutorial-backdrop" aria-hidden="true" /><TutorialCard id={tutorial} onDismiss={dismissTutorial} /></>}
     {rulesOpen && <RulesDialog discovered={discovered} onClose={() => setRulesOpen(false)} onResetTutorial={() => { resetTutorialSeen(); setTutorialSeen(new Set()); setMessage(COPY.web.tutorialResetInGame); }} />}
   </main>;
 }
