@@ -2,6 +2,7 @@ import type { MechanicId } from './model';
 
 const DISCOVERED_KEY = 'dont-be-late:discovered-mechanics';
 const SEEN_KEY = 'dont-be-late:tutorial-seen';
+const FIRST_ALARM_ADVICE_KEY = 'dont-be-late:first-alarm-advice-seen';
 
 function readSet(key: string): Set<MechanicId> {
   try {
@@ -34,4 +35,16 @@ export function saveTutorialSeen(values: Set<MechanicId>): void {
 
 export function resetTutorialSeen(): void {
   localStorage.removeItem(SEEN_KEY);
+}
+
+export function loadFirstAlarmAdviceSeen(): boolean {
+  try {
+    return localStorage.getItem(FIRST_ALARM_ADVICE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveFirstAlarmAdviceSeen(): void {
+  localStorage.setItem(FIRST_ALARM_ADVICE_KEY, 'true');
 }
