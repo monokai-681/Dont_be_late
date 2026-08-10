@@ -21,6 +21,7 @@ export type {
   ShopItemId,
   GameResult,
   DayRecord,
+  TelemetryEvent,
   WorkDayRecord,
   WeekendRecord,
   BaseGameState,
@@ -70,6 +71,9 @@ export {
 // ── 平衡参数（不可变默认对象；扫描时复制并通过参数注入）──────────
 export { DEFAULT_BALANCE_CONFIG } from './config/balance';
 export type { BalanceConfig } from './config/balance';
+
+export { createTelemetryReport, GAME_VERSION, TELEMETRY_SCHEMA_VERSION } from './telemetry';
+export type { TelemetryReport } from './telemetry';
 
 // ── 核心函数 ────────────────────────────────────────────────────
 export { calculateSOL }                             from './sol';

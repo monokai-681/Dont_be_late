@@ -72,4 +72,4 @@ Node.js 要求：20.19 或更高版本。
 
 ## 当前开发状态
 
-takeover、Phase 1 核心引擎和 Phase 2 CLI 均已完成，Phase 3 Web UI 正在进行。Web 原型采用 React＋Vite＋TypeScript，当前以灰色背景验证信息结构；后续将使用经高斯模糊的无版权 stock 图片作为背景，不生成图片资源。当前采用 `SNOOZE_GRADIENT=60`、工作日与周末每日债务结转 `0.5`，以及睡债 180～300 时坐过站概率由 0% 线性升至 100%（+20 分钟）；地铁故障机制暂时关闭。
+takeover、Phase 1 核心引擎和 Phase 2 CLI 均已完成，Phase 3 Web UI 正在进行。Web 原型采用 React＋Vite＋TypeScript，当前以灰色背景验证信息结构；后续将使用来源和许可可追溯、经高斯模糊的 stock 图片作为背景，不生成图片资源。当前采用 `SNOOZE_GRADIENT=60`、工作日与周末每日债务结转 `0.5`，以及睡债 180～300 时坐过站概率由 0% 线性升至 100%（+20 分钟）；地铁故障机制暂时关闭。

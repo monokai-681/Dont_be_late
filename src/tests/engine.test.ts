@@ -99,13 +99,20 @@ describe('engine reducer', () => {
     expect(commute.phase).toBe('commute');
     if (commute.phase !== 'commute') return;
     expect(commute.sleepDebt).toBe(105);
+    expect(commute.netSleepDebt).toBe(105);
     expect(commute.snoozeCount).toBe(1);
+    expect(commute.telemetry.map(event => event.type)).toEqual([
+      'game_started', 'alarm_set', 'sleep_resolved', 'wakeup_resolved',
+    ]);
 
     const office = dispatch(commute, { type: 'CHOOSE_COMMUTE', choice: 'subway' });
     expect(office.phase).toBe('office');
     if (office.phase !== 'office') return;
     expect(office.arriveMin).toBe(514);
     expect(office.balance).toBe(65);
+    expect(office.telemetry.at(-1)).toMatchObject({
+      type: 'commute_resolved', choice: 'subway', arriveMin: 514,
+    });
 
     const dayTwo = dispatch(office, { type: 'CONTINUE_TO_NEXT_DAY' });
     expect(dayTwo.phase).toBe('bedtime');
@@ -177,6 +184,7 @@ describe('engine reducer', () => {
     if (sleeping.phase !== 'sleeping') return;
     expect(sleeping.newDebtTonight).toBe(105);
     expect(sleeping.sleepDebt).toBe(155);
+    expect(sleeping.netSleepDebt).toBe(105);
   });
 
   test('debt carry remains injectable for isolated parameter scans', () => {
@@ -402,6 +410,44 @@ describe('engine reducer', () => {
     ]);
     expect(result.finalBalance).toBeGreaterThanOrEqual(0);
     expect(() => reducer(result.state, { type: 'START_GAME' }, deps)).toThrow(InvalidActionError);
+  });
+
+  test('hidden net sleep debt accumulates all ten earliest-alarm workday shortfalls', () => {
+    const deps: EngineDeps = { rng: () => 0.999999 };
+    let result = reducer(createInitialState(), { type: 'START_GAME' }, deps);
+
+    for (let steps = 0; steps < 100 && result.status === 'playing'; steps += 1) {
+      const state = result.state;
+      switch (state.phase) {
+        case 'bedtime':
+          result = !state.isWorkDay
+            ? reducer(state, { type: 'PASS_WEEKEND' }, deps)
+            : state.alarmMin === undefined
+              ? reducer(state, { type: 'SET_ALARM', alarmMin: 360 }, deps)
+              : reducer(state, { type: 'START_SLEEP' }, deps);
+          break;
+        case 'sleeping':
+          result = reducer(state, { type: 'WAKE_UP' }, deps);
+          break;
+        case 'wakeup':
+          result = reducer(state, { type: 'CONTINUE_TO_COMMUTE' }, deps);
+          break;
+        case 'commute':
+          result = reducer(state, { type: 'CHOOSE_COMMUTE', choice: 'subway' }, deps);
+          break;
+        case 'office':
+          result = reducer(state, { type: 'CONTINUE_TO_NEXT_DAY' }, deps);
+          break;
+        case 'intro':
+          result = reducer(state, { type: 'START_GAME' }, deps);
+          break;
+        case 'bribe':
+          throw new Error('earliest-alarm subway route unexpectedly arrived late');
+      }
+    }
+
+    expect(result.status).toBe('win');
+    if (result.status === 'win') expect(result.state.netSleepDebt).toBe(1_650);
   });
 
   test('calculateArrivalMinutes validates inputs', () => {

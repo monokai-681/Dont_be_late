@@ -70,10 +70,24 @@ export interface WeekendRecord extends DayRecordBase {
 
 export type DayRecord = WorkDayRecord | WeekendRecord;
 
+export type TelemetryEvent =
+  | { type: 'game_started'; day: 1 }
+  | { type: 'item_bought'; day: number; itemId: ShopItemId; qty: number; balanceAfter: number }
+  | { type: 'alarm_set'; day: number; alarmMin: number }
+  | { type: 'dora_used'; day: number; remainingDora: number }
+  | { type: 'sleep_resolved'; day: number; solMin: number; actualSleepMin: number; newDebtMin: number; sleepDebt: number; netSleepDebt: number }
+  | { type: 'wakeup_resolved'; day: number; snoozeCount: number; routineMin: number }
+  | { type: 'commute_resolved'; day: number; choice: CommuteId; commuteMin: number; cost: number; arriveMin: number; cancelled: boolean; subwayFailed: boolean; subwayMissedStop: boolean }
+  | { type: 'weekend_completed'; day: number; sleepDebt: number; netSleepDebt: number }
+  | { type: 'bribe_chosen'; day: number; accepted: boolean; balanceAfter: number };
+
 export interface BaseGameState {
   dayIndex: number;
   balance: number;
   sleepDebt: number;
+  /** Hidden cumulative sleep loss: never decays and is not shown to the player. */
+  netSleepDebt: number;
+  telemetry: TelemetryEvent[];
   bribeUsed: boolean;
   inventory: Inventory;
   pendingArrivals: PendingArrivals;

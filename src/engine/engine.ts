@@ -33,6 +33,7 @@ import type {
   OfficeState,
   ResultState,
   SleepingState,
+  TelemetryEvent,
   WakeupState,
   WorkDayRecord,
 } from './types';
@@ -54,6 +55,8 @@ export function createInitialState(
     dayIndex: 0,
     balance: config.INITIAL_BALANCE,
     sleepDebt: 0,
+    netSleepDebt: 0,
+    telemetry: [],
     bribeUsed: false,
     inventory: {
       pillow: false,
@@ -106,12 +109,18 @@ function commonState(state: BaseGameState): BaseGameState {
     dayIndex: state.dayIndex,
     balance: state.balance,
     sleepDebt: state.sleepDebt,
+    netSleepDebt: state.netSleepDebt,
+    telemetry: state.telemetry,
     bribeUsed: state.bribeUsed,
     inventory: state.inventory,
     pendingArrivals: state.pendingArrivals,
     usedEventFlavors: state.usedEventFlavors,
     dailyLog: state.dailyLog,
   };
+}
+
+function withTelemetry<T extends BaseGameState>(state: T, event: TelemetryEvent): T {
+  return { ...state, telemetry: [...state.telemetry, event] };
 }
 
 function enterDay(
@@ -236,7 +245,12 @@ function reduceBedtime(
   switch (action.type) {
     case 'BUY_ITEM': {
       const purchase = onBuyItem(state, action.itemId, action.qty, config);
-      return purchase.ok ? playing(purchase.state) : rejected(state, purchase.reason);
+      return purchase.ok
+        ? playing(withTelemetry(purchase.state, {
+          type: 'item_bought', day: state.dayIndex, itemId: action.itemId,
+          qty: action.qty ?? 1, balanceAfter: purchase.state.balance,
+        }))
+        : rejected(state, purchase.reason);
     }
     case 'SET_ALARM':
       if (!state.isWorkDay) return invalidAction(state, action);
@@ -248,16 +262,21 @@ function reduceBedtime(
       ) {
         return rejected(state, 'INVALID_ALARM');
       }
-      return playing({ ...state, alarmMin: action.alarmMin });
+      return playing(withTelemetry({ ...state, alarmMin: action.alarmMin }, {
+        type: 'alarm_set', day: state.dayIndex, alarmMin: action.alarmMin,
+      }));
     case 'USE_DORA_TONIGHT':
       if (!state.isWorkDay) return invalidAction(state, action);
       if (state.doraUsedTonight) return rejected(state, 'DORA_ALREADY_USED');
       if (state.inventory.dora <= 0) return rejected(state, 'NO_DORA');
-      return playing({
+      const next: BedtimeState = {
         ...state,
         doraUsedTonight: true,
         inventory: { ...state.inventory, dora: state.inventory.dora - 1 },
-      });
+      };
+      return playing(withTelemetry(next, {
+        type: 'dora_used', day: state.dayIndex, remainingDora: next.inventory.dora,
+      }));
     case 'START_SLEEP': {
       if (!state.isWorkDay) return invalidAction(state, action);
       if (state.alarmMin === undefined) return rejected(state, 'ALARM_NOT_SET');
@@ -273,8 +292,13 @@ function reduceBedtime(
         actualSleepMin,
         newDebtTonight,
         sleepDebt: state.sleepDebt * config.WORKDAY_DEBT_CARRY + newDebtTonight,
+        netSleepDebt: state.netSleepDebt + newDebtTonight,
       };
-      return playing(sleepingState);
+      return playing(withTelemetry(sleepingState, {
+        type: 'sleep_resolved', day: state.dayIndex, solMin: solTonight,
+        actualSleepMin, newDebtMin: newDebtTonight, sleepDebt: sleepingState.sleepDebt,
+        netSleepDebt: sleepingState.netSleepDebt,
+      }));
     }
     case 'PASS_WEEKEND': {
       if (!WEEKEND_INDICES.includes(state.dayIndex)) return invalidAction(state, action);
@@ -288,7 +312,9 @@ function reduceBedtime(
           balanceAfter: state.balance,
         },
       ];
-      return playing(enterDay({ ...state, sleepDebt }, state.dayIndex + 1, deps, dailyLog));
+      return playing(enterDay(withTelemetry({ ...state, sleepDebt }, {
+        type: 'weekend_completed', day: state.dayIndex, sleepDebt, netSleepDebt: state.netSleepDebt,
+      }), state.dayIndex + 1, deps, dailyLog));
     }
     default:
       return invalidAction(state, action);
@@ -314,7 +340,9 @@ function reduceSleeping(
     snoozeCount,
     routineMin: ROUTINE_BASE + snoozeCount * SNOOZE_PER,
   };
-  return playing(wakeupState);
+  return playing(withTelemetry(wakeupState, {
+    type: 'wakeup_resolved', day: state.dayIndex, snoozeCount, routineMin: wakeupState.routineMin,
+  }));
 }
 
 function reduceWakeup(state: WakeupState, action: Action): GameResult {
@@ -358,6 +386,12 @@ function reduceCommute(
     subwayFailed: commute.subwayFailed,
     subwayMissedStop: commute.subwayMissedStop,
     arriveMin,
+    telemetry: [...state.telemetry, {
+      type: 'commute_resolved' as const, day: state.dayIndex, choice: action.choice,
+      commuteMin: commute.commuteMin, cost: commute.commuteCost, arriveMin,
+      cancelled: commute.cancelled, subwayFailed: commute.subwayFailed,
+      subwayMissedStop: commute.subwayMissedStop,
+    }],
   };
 
   if (arriveMin > CLOCKIN_DEADLINE) {
@@ -395,15 +429,20 @@ function reduceBribe(
   switch (action.type) {
     case 'CHOOSE_BRIBE':
       if (state.balance < config.BRIBE_COST) return lose(state, 'CANNOT_AFFORD_BRIBE');
-      return playing({
+      const next: OfficeState = {
         ...state,
         phase: 'office',
         balance: state.balance - config.BRIBE_COST,
         bribeUsed: true,
         isLate: false,
-      });
+      };
+      return playing(withTelemetry(next, {
+        type: 'bribe_chosen', day: state.dayIndex, accepted: true, balanceAfter: next.balance,
+      }));
     case 'DECLINE_BRIBE':
-      return lose(state, 'REFUSED_BRIBE');
+      return lose(withTelemetry(state, {
+        type: 'bribe_chosen', day: state.dayIndex, accepted: false, balanceAfter: state.balance,
+      }), 'REFUSED_BRIBE');
     default:
       return invalidAction(state, action);
   }
@@ -417,7 +456,7 @@ export function reducer(
   switch (state.phase) {
     case 'intro':
       return action.type === 'START_GAME'
-        ? playing(enterDay(state, 1, deps))
+        ? playing(enterDay(withTelemetry(state, { type: 'game_started', day: 1 }), 1, deps))
         : invalidAction(state, action);
     case 'bedtime':
       return reduceBedtime(state, action, deps);

@@ -90,7 +90,7 @@ export const COPY = {
       ],
       closing: '撑过年度最后 10 个工作日吧！', start: '开始第一晚', rulesLabel: '规则手册', seed: (seed: string) => `本局 seed：${seed}`,
     },
-    result: { winEyebrow: '成功打卡 10 / 10', lossEyebrow: (day: number) => `止步 Day ${day}`, winTitle: '你没有迟到。', lossTitle: '迟到了。', balance: '最终余额', restart: '再来一局', onTime: '准时', late: '迟到', weekend: '周末补觉' },
+    result: { winEyebrow: '成功打卡 10 / 10', lossEyebrow: (day: number) => `止步 Day ${day}`, totalDebt: (minutes: number) => `总睡债 ${minutes} 分钟`, winTitle: '你没有迟到。', lossTitle: '迟到了。', balance: '最终余额', restart: '再来一局', copyTelemetry: '复制调试 JSON', telemetryCopied: '调试 JSON 已复制，可直接发送给开发者。', telemetryCopyFailed: '复制失败，请使用支持剪贴板权限的浏览器。', onTime: '准时', late: '迟到', weekend: '周末补觉' },
     bedtime: {
       workday: '睡前准备', conditionsTitle: '明早通勤条件',
       subtitle: (weekday: string, time: string) => `现在是${weekday}凌晨${time}，准备入睡。`,

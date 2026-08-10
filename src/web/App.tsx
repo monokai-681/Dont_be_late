@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ALARM_MAX,
   ALARM_MIN,
@@ -8,6 +8,7 @@ import {
   ROUTINE_BASE,
   SNOOZE_PER,
   createInitialState,
+  createTelemetryReport,
   createRngFromString,
   reducer,
   type Action,
@@ -101,6 +102,7 @@ export function App() {
   const [discovered, setDiscovered] = useState<Set<MechanicId>>(() => loadDiscovered());
   const [tutorialSeen, setTutorialSeen] = useState<Set<MechanicId>>(() => loadTutorialSeen());
   const [tutorial, setTutorial] = useState<MechanicId | null>(null);
+  const [telemetryMessage, setTelemetryMessage] = useState('');
 
   const state = result.state;
 
@@ -146,6 +148,21 @@ export function App() {
     setSeed(nextSeed);
     setResult({ status: 'playing', state: createInitialState(config) });
     setMessage(''); setTutorial(null);
+    setTelemetryMessage('');
+  };
+
+  const copyTelemetry = async () => {
+    if (result.status !== 'win' && result.status !== 'lose') return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(
+        createTelemetryReport(result.state, seed, config),
+        null,
+        2,
+      ));
+      setTelemetryMessage(COPY.web.result.telemetryCopied);
+    } catch {
+      setTelemetryMessage(COPY.web.result.telemetryCopyFailed);
+    }
   };
 
   if (state.phase === 'intro') {
@@ -163,10 +180,12 @@ export function App() {
 
   if (result.status === 'win' || result.status === 'lose') {
     return <main className="result-shell"><section className="result-card">
-      <p className="eyebrow">{result.status === 'win' ? COPY.web.result.winEyebrow : COPY.web.result.lossEyebrow(state.dayIndex)}</p>
+      <p className="eyebrow">{result.status === 'win' ? COPY.web.result.winEyebrow : COPY.web.result.lossEyebrow(state.dayIndex)} · {COPY.web.result.totalDebt(Math.round(state.sleepDebt))}</p>
       <h1>{result.status === 'win' ? COPY.web.result.winTitle : COPY.web.result.lossTitle}</h1>
       <p>{COPY.web.result.balance} <strong>¥{state.balance}</strong></p>
       <div className="day-log">{state.dailyLog.map(record => <div key={record.day}><strong>Day {record.day}</strong><span>{record.isWorkDay ? `${record.arriveHHMM ?? '—'} · ${record.isLate ? COPY.web.result.late : COPY.web.result.onTime}` : COPY.web.result.weekend}</span><span>¥{record.balanceAfter}</span></div>)}</div>
+      <button className="secondary" onClick={copyTelemetry}>{COPY.web.result.copyTelemetry}</button>
+      {telemetryMessage && <p role="status">{telemetryMessage}</p>}
       <button className="primary" onClick={restart}>{COPY.web.result.restart}</button>
     </section></main>;
   }
@@ -217,12 +236,11 @@ function BedtimeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { ph
   const [alarm, setAlarm] = useState(state.alarmMin ?? ALARM_MIN);
   const [cart, setCart] = useState<Set<ShopItemId>>(() => new Set());
   const [showFirstAlarmAdvice, setShowFirstAlarmAdvice] = useState(() => state.dayIndex === 1 && !loadFirstAlarmAdviceSeen());
-  const alarmHour = Math.floor(alarm / 60);
-  const alarmMinute = alarm % 60;
-  const alarmHours = Array.from({ length: ALARM_MAX / 60 - ALARM_MIN / 60 + 1 }, (_, index) => ALARM_MIN / 60 + index);
-  const alarmMinutes = Array.from({ length: 60 / ALARM_STEP }, (_, index) => index * ALARM_STEP).filter(minute => alarmHour < ALARM_MAX / 60 || minute === 0);
-  const setAlarmHour = (hour: number) => setAlarm(hour * 60 + (hour === ALARM_MAX / 60 ? 0 : alarmMinute));
-  const setAlarmMinute = (minute: number) => setAlarm(alarmHour * 60 + minute);
+  const setAlarmTime = (value: string) => {
+    const [hours, minutes] = value.split(':').map(Number);
+    const next = hours * 60 + minutes;
+    if (Number.isInteger(hours) && Number.isInteger(minutes) && next >= ALARM_MIN && next <= ALARM_MAX && next % ALARM_STEP === 0) setAlarm(next);
+  };
   const permanentOwned = (id: ShopItemId) => id !== 'dora' && state.inventory[id];
   const pending = (id: ShopItemId) => id !== 'dora' && state.pendingArrivals[id];
   const cartItems = SHOP.filter(item => cart.has(item.id));
@@ -253,7 +271,7 @@ function BedtimeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { ph
       return <button key={item.id} className={`shop-item${item.id === 'dora' ? ' dora-item' : ''}${selected ? ' selected' : ''}`} aria-pressed={selected} disabled={unavailable} onClick={() => toggleCartItem(item.id)}><span className="shop-copy"><strong>{item.name}</strong><small>{permanentOwned(item.id) ? COPY.web.bedtime.owned : pending(item.id) ? COPY.web.bedtime.pending : selected ? COPY.web.bedtime.selected : item.delivery ? <><b>{item.delivery}</b>；{item.note}</> : item.note}</small></span><span className="shop-price">¥{item.price}</span></button>;
     })}</div></section>
     {cartItems.length > 0 && <section className="cart-panel" aria-label={COPY.web.bedtime.cart}><div className="cart-heading"><h3>{COPY.web.bedtime.cart}</h3><strong>{COPY.web.bedtime.cartTotal} ¥{cartTotal}</strong></div><div className="cart-items">{cartItems.map(item => <button key={item.id} onClick={() => toggleCartItem(item.id)} aria-label={COPY.web.bedtime.removeFromCart(item.name)}>{item.name}<span>¥{item.price}</span></button>)}</div><p className="cart-balance">{COPY.web.bedtime.cartEstimatedBalance(state.balance - cartTotal)}</p>{cartOverBudget && <p className="cart-warning">{COPY.web.bedtime.cartOverBudget}</p>}<button className="primary cart-confirm" disabled={cartOverBudget} onClick={confirmCart}>{COPY.web.bedtime.confirmCart(cartTotal)}</button></section>}
-    {state.isWorkDay ? <div className="alarm-panel">{showFirstAlarmAdvice && <aside className="alarm-advice"><strong>{COPY.web.bedtime.firstAlarmAdviceTitle}</strong><p>{COPY.web.bedtime.firstAlarmAdviceBody}</p><button type="button" onClick={dismissFirstAlarmAdvice}>{COPY.web.bedtime.firstAlarmAdviceDismiss}</button></aside>}<div className="alarm-row"><span className="alarm-label">{COPY.web.bedtime.alarm}</span><div className="alarm-wheels" aria-label="设置闹钟时间"><TimeWheel label="时" value={alarmHour} options={alarmHours} format={value => String(value).padStart(2, '0')} onChange={setAlarmHour} /><span className="alarm-separator" aria-hidden="true">:</span><TimeWheel label="分" value={alarmMinute} options={alarmMinutes} format={value => String(value).padStart(2, '0')} onChange={setAlarmMinute} /></div></div>
+    {state.isWorkDay ? <div className="alarm-panel">{showFirstAlarmAdvice && <aside className="alarm-advice"><strong>{COPY.web.bedtime.firstAlarmAdviceTitle}</strong><p>{COPY.web.bedtime.firstAlarmAdviceBody}</p><button type="button" onClick={dismissFirstAlarmAdvice}>{COPY.web.bedtime.firstAlarmAdviceDismiss}</button></aside>}<label className="alarm-row"><span className="alarm-label">{COPY.web.bedtime.alarm}</span><input className="alarm-time-input" type="time" min={formatClock(ALARM_MIN)} max={formatClock(ALARM_MAX)} step={ALARM_STEP * 60} value={formatClock(alarm)} aria-label="设置闹钟时间" onChange={event => setAlarmTime(event.target.value)} /></label>
       {state.inventory.dora > 0 && !state.doraUsedTonight && <button className="secondary" onClick={() => act({ type: 'USE_DORA_TONIGHT' })}>{COPY.web.bedtime.useDora(state.inventory.dora)}</button>}
       <button className="primary" disabled={cartPending} onClick={() => act([
         { type: 'SET_ALARM', alarmMin: alarm },
@@ -263,18 +281,6 @@ function BedtimeScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { ph
       ])}>{cartPending ? COPY.web.bedtime.resolveCart : COPY.web.bedtime.sleep}</button></div>
       : <button className="primary bedtime-rest" disabled={cartPending} onClick={() => act({ type: 'PASS_WEEKEND' })}>{cartPending ? COPY.web.bedtime.resolveCart : COPY.web.bedtime.rest}</button>}
   </div>;
-}
-
-function TimeWheel({ label, value, options, format, onChange }: { label: string; value: number; options: number[]; format: (value: number) => string; onChange: (value: number) => void }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const index = options.indexOf(value);
-    if (index >= 0 && viewportRef.current) viewportRef.current.scrollTop = index * 40;
-  }, [options, value]);
-  return <div className="time-wheel"><div ref={viewportRef} className="time-wheel-viewport" role="listbox" aria-label={`选择${label}`} onScroll={event => {
-    const index = Math.max(0, Math.min(options.length - 1, Math.round(event.currentTarget.scrollTop / 40)));
-    if (options[index] !== value) onChange(options[index]);
-  }}><div className="time-wheel-list">{options.map(option => <button key={option} type="button" role="option" aria-selected={option === value} className={option === value ? 'selected' : ''} onClick={() => onChange(option)}>{format(option)}</button>)}</div></div></div>;
 }
 
 function CommuteScreen({ state, act }: ScreenProps<Extract<ActiveGameState, { phase: 'commute' }>>) {
