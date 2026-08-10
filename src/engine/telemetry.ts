@@ -2,7 +2,7 @@ import type { BalanceConfig } from './config/balance';
 import type { ResultState, TelemetryEvent } from './types';
 
 export const TELEMETRY_SCHEMA_VERSION = 1;
-export const GAME_VERSION = '0.1.0';
+export const GAME_VERSION = '0.1.1.26.08.11';
 
 export interface TelemetryReport {
   schemaVersion: number;

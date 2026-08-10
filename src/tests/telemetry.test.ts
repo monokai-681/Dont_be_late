@@ -19,7 +19,7 @@ describe('telemetry reports', () => {
 
     expect(createTelemetryReport(state, 'test-seed', DEFAULT_BALANCE_CONFIG)).toMatchObject({
       schemaVersion: 1,
-      gameVersion: '0.1.0',
+      gameVersion: '0.1.1.26.08.11',
       seed: 'test-seed',
       outcome: { status: 'lose', loseReason: 'REFUSED_BRIBE', netSleepDebt: 315 },
       events: [{ type: 'alarm_set', day: 1, alarmMin: 420 }],
