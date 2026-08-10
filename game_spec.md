@@ -63,8 +63,11 @@
 | `LAMP_MULTIPLIER` | `0.65` | 智能台灯效果：snooze 期望次数乘以该系数（打 65 折 = 减少 35% 赖床概率）|
 | `WORKDAY_DEBT_CARRY` | `0.5` | 工作日计算当晚新债前，旧 sleepDebt 保留 50% |
 | `WEEKEND_DEBT_DECAY` | `0.5` | Day 6/7 各自保留 50% 旧 sleepDebt；完整周末后剩 25% |
-| `COMMUTE_SUBWAY_FAILURE_RATE` | `0.05` | 每次乘地铁独立有 5% 概率发生信号故障；不受睡眠债影响 |
+| `COMMUTE_SUBWAY_FAILURE_RATE` | `0`（暂停） | 信号故障彩蛋机制保留代码但默认不激活；未来调为正数即可重启 |
 | `COMMUTE_SUBWAY_FAILURE_EXTRA_MIN` | `15`（分钟）| 地铁故障时在 60 分钟基础耗时上额外增加 15 分钟 |
+| `COMMUTE_SUBWAY_MISSED_STOP_DEBT_THRESHOLD` | `180`（分钟 sleepDebt）| 坐过站概率开始线性上升的睡债门槛 |
+| `COMMUTE_SUBWAY_MISSED_STOP_DEBT_CAP` | `300`（分钟 sleepDebt）| 坐过站概率达到 100% 的睡债上限；180～300 区间线性缩放 |
+| `COMMUTE_SUBWAY_MISSED_STOP_EXTRA_MIN` | `20`（分钟）| 坐过站后折返造成的额外耗时 |
 | `MAX_COMMUTE_BONUS` | `25`（分钟）| 快车/专车 天气+事件叠加加时的硬上限（2026-08-05 机制简化：二者独立 roll，双灾压到 25 封顶）|
 
 ### 2.3 尺寸/结构常量
@@ -271,7 +274,7 @@ morningRoutineMin = ROUTINE_BASE + snoozeCount × SNOOZE_PER
 > - 「开车」选项已移除，原型只有 3 种通勤方式
 > - 快车取消：最多发生 0 或 1 次，**绝不会取消第二次**（重新叫的第二辆必然成功）
 > - 专车：取消率 0%（从不取消），但**不免疫**天气/事件加时
-> - 地铁：免疫天气与城市事件；每次独立有 5% 概率发生自身故障并额外增加 15 分钟
+> - 地铁：免疫天气与城市事件；信号故障机制当前暂停。睡债 180～300 分钟时，坐过站概率从 0% 线性增加至 100%，额外增加 20 分钟
 
 ```typescript
 type CommuteId = 'subway' | 'express' | 'premium';
@@ -281,6 +284,7 @@ interface CommuteResult {
   commuteCost: number;   // 最终费用（已经扣到 balance 外单独返回）
   cancelled: boolean;    // 快车是否被取消（前端展示 flavor）
   subwayFailed: boolean; // 地铁是否发生故障（前端展示 flavor）
+  subwayMissedStop: boolean; // 高睡债时是否坐过站（前端展示 flavor）
 }
 
 /**
@@ -289,7 +293,9 @@ interface CommuteResult {
  * @param choice      玩家选择的通勤 ID
  * @param isSnow      当天下雪（true/false）
  * @param eventBonus  当天城市事件加时（0 / 15 / 20 分钟，节前高峰 20）
- * @param rng         可复现随机数发生器注入（快车取消/地铁故障 roll 用）
+ * @param rng         可复现随机数发生器注入（快车取消/地铁风险 roll 用）
+ * @param config      平衡参数（参数扫描时注入）
+ * @param sleepDebt   当天早晨已生效的睡眠债
  * @returns 结算结果
  */
 function calculateCommute(
@@ -297,6 +303,8 @@ function calculateCommute(
   isSnow: boolean,
   eventBonus: number,
   rng: Rng,
+  config = DEFAULT_BALANCE_CONFIG,
+  sleepDebt = 0,
 ): CommuteResult {
   // 基础参数（三档）
   let baseMin: number;
@@ -325,16 +333,23 @@ function calculateCommute(
   const cancelled = choice === 'express' && rng() < cancelRate;
   const cancelMin = cancelled ? 10 : 0;
 
-  // Step 3: 地铁故障 roll；天气/城市事件仍然不会影响地铁
-  const subwayFailed = choice === 'subway' && rng() < 0.05;
+  // Step 3: 地铁风险 roll；天气/城市事件仍然不会影响地铁。
+  // 坐过站优先，180～300 分钟睡债对应 0%～100% 的线性概率。
+  const missedStopRate = Math.max(0, Math.min((sleepDebt - 180) / (300 - 180), 1));
+  const subwayMissedStop = choice === 'subway' && missedStopRate > 0 && rng() < missedStopRate;
+  const subwayMissedStopMin = subwayMissedStop ? 20 : 0;
+  // 信号故障机制默认暂停；未来启用时只在未坐过站时判定，以保持互斥。
+  const subwayFailed = choice === 'subway' && !subwayMissedStop
+    && failureRate > 0 && rng() < failureRate;
   const subwayFailureMin = subwayFailed ? 15 : 0;
 
   // Step 4: 汇总
   return {
-    commuteMin: baseMin + bonusMin + cancelMin + subwayFailureMin,
+    commuteMin: baseMin + bonusMin + cancelMin + subwayFailureMin + subwayMissedStopMin,
     commuteCost: baseCost,
     cancelled,
-    subwayFailed
+    subwayFailed,
+    subwayMissedStop
   };
 }
 ```
@@ -397,11 +412,11 @@ Day 0 开局：
 
 | 中文名 | 内部 ID | 基础耗时 | 单次费用 | 自身随机风险 | 天气/事件影响 | 一句话定位 |
 |-------|--------|---------|---------|-------------|-------------|----------|
-| 🚇 地铁 | `subway` | **60 分钟** | **5 元** | **5% 故障，+15 分钟** | ❌ 完全免疫（0 加时）| **便宜抗灾但慢**：通常 60 分钟，故障时 75 分钟 |
+| 🚇 地铁 | `subway` | **60 分钟** | **5 元** | **睡债 180～300 时坐过站概率 0%→100%，+20 分钟** | ❌ 完全免疫（0 加时）| **便宜抗灾但会累积疲劳风险**：不处理睡债会把省钱路线变成赌运气 |
 | 🚕 快车 | `express` | **25 分钟** | **30 元** | **30%**（取消 +10 分，最多取消 1 次）| ✅ 下雪 +15 / 事件 +15/+20 | **性价比之选**：便宜一半但赌取消率，还受天气事件影响 |
 | 🚘 专车 | `premium` | **25 分钟** | **60 元**（快车 2 倍）| **0%**（从不取消）| ✅ 下雪 +15 / 事件 +15/+20（不免疫）| **稳但贵**：60 元买「从不取消」，但天气/事件照样加时，不如地铁稳 |
 
-> 三档取舍口诀：**地铁 = 时间换钱并承担小故障；快车 = 省钱赌取消；专车 = 花钱买不被取消。**
+> 三档取舍口诀：**地铁 = 时间换钱，还要管理疲劳；快车 = 省钱赌取消；专车 = 花钱买不被取消。**
 
 ### 5.2 商店物品（5 种）
 
@@ -659,9 +674,13 @@ START_GAME → SET_ALARM/BUY_ITEM/USE_DORA_TONIGHT → START_SLEEP
    - 当天不 roll 其他普通事件（互斥，节前独占）
 
 4. 地铁故障：
+   - 当前暂停；实现与配置保留，但默认 rate=0，不进行 RNG roll
+   - 未来启用时只在未坐过站时 roll，额外增加 15 分钟
+
+5. 高睡债地铁坐过站：
    - 不属于城市事件，在玩家选择地铁后独立 roll
-   - 每次乘坐有 5% 概率触发，额外增加 15 分钟
-   - 仍然免疫天气与城市事件；故障率不与 sleepDebt 联动
+   - `sleepDebt <= 180` 时为 0%；180～300 之间线性增加；`sleepDebt >= 300` 时为 100%，额外增加 20 分钟
+   - 优先于未来可能重启的地铁故障；低于或等于门槛时不消耗 RNG roll
 ```
 
 **实现机制四要素（必须遵守，2026-08-05 补全）：**
@@ -724,13 +743,14 @@ function rollEvent(
 - 工具：`src/simulator.ts`；默认 base seed `20260807`，每类策略 10,000 局，相同局号在不同策略间共享同一 seed。
 - 固定策略：不购物、不看已揭示信息，每个工作日固定 07:00 闹钟并乘地铁。
 - 普通自适应策略：购买低价睡眠用品，按睡债调整闹钟，并根据已揭示天气、事件和余额选择通勤；这是用于比较的规则型基线，不代表最优玩家。
-- 安全参考策略：固定 07:00 闹钟；根据当晚最大可能 snooze 和已揭示天气/事件，先预留最低保底通勤费，再按台灯→枕头→眼罩→耳塞的顺序购物；早晨选择“考虑快车取消和地铁故障后仍保证准时”的最低成本通勤，不使用 DORA。
+- 安全参考策略：固定 07:00 闹钟；根据当晚最大可能 snooze、睡债门槛和已揭示天气/事件，先预留最低保底通勤费，再按台灯→枕头→眼罩→耳塞的顺序购物；早晨选择“考虑快车取消、地铁故障和可能坐过站后仍保证准时”的最低成本通勤，不使用 DORA。
 - 报告分别输出通关率、Day 12 到达率、余额、失败原因、死亡日、启发式失败归因和可复现失败 seed；失败归因不是因果证明，平衡结论需要结合策略规则复核。
 - 首轮关键结果：固定、普通自适应与安全参考策略均为 100% 通关；安全参考策略纯 RNG 整局失败率 0%。因此 D-9 的 `<25%` 上限形式上通过，但当前参数过于安全，不能据此认定随机体验已经合理。
 - D-8 首轮实验被模拟数据否证：Gradient 100 时，固定、普通自适应与安全参考策略在每类 10,000 局中均为 100% 通关；上限 6 没有被自然触发。
 - 第二轮曾测试完全线性债务累积：固定和普通策略均为 0%，安全策略仅 42.65%，纯 RNG 失败 57.35%，违反 D-9，故不采用。
 - 第二轮正式值保留工作日/周末每日 0.5 结转并将 Gradient 降至 60。默认 seed `20260807`、每类 100,000 局结果：固定策略 32.051%，普通自适应 60.786%，安全参考 99.994%；安全参考仅 6 局失败，纯 RNG 整局失败率 0.006%，通过 D-9。
 - D-12 在保持 Gradient 60 和债务结转 0.5 不变的前提下，加入地铁 5% 故障与 15 分钟加时。相同 seed、每类 100,000 局的新正式结果：固定策略 24.482%，普通自适应 48.933%，安全参考 97.662%；安全参考纯 RNG 整局失败率 2.338%，仍通过 D-9。上一条数据保留为加入地铁故障前的历史对照。
+- D-13（历史方案）曾使用“睡债≥200、30% 坐过站 +20 分钟”并叠加地铁故障。当前版本已改为 180～300 的线性坐过站曲线，地铁故障默认暂停；需在真实试玩后重新以当前参数完成正式平衡验证。
 - `SNOOZE_MAX` 继续保持 6；在 0.5 结转下自然睡眠债不会触及更高上限，单独把上限改为 7 或 10 不改变默认策略结果。
 
 ---
@@ -854,9 +874,10 @@ function onBuyItem(state: GameState, itemId: ShopItemId, qty?: number): GameStat
 | P1-3 | 前端 flavor 映射 | 天气 flavor 随机池的具体文案/图标命名 | §7.1 已列 6 种 flavor |
 | D-8 | 固定保守策略是否允许无脑通关 | **已确认并验证第二轮方案**：09:00 打卡、地铁 60 分钟、snooze 每次 9 分钟且上限 6、工作日/周末每日债务结转 0.5、Gradient 60 | 100,000 局中固定策略 32.051%、普通策略 60.786%、安全参考 99.994%；单独提高 snooze 上限无效 |
 | D-9 | 是否允许不可规避的纯 RNG 死亡 | **已确认**：允许运气造成失败，但安全参考策略下纯 RNG 导致的整局失败率必须低于 25% | 统计口径见 §8.4 |
-| D-10 | 模拟器目标通关率 | **延期到真实试玩后校准**：不为了制造随机感而强行把安全策略纯 RNG 失败率调到某个目标 | D-12 后当前实测固定 24.482%、普通 48.933%、安全 97.662%；模拟数据作为基线，不作为最终玩家通关率承诺 |
+| D-10 | 模拟器目标通关率 | **延期到真实试玩后校准**：不为了制造随机感而强行把安全策略纯 RNG 失败率调到某个目标 | 当前线性坐过站曲线待重新完成正式模拟；历史 D-13 数据不再代表当前配置 |
 | D-11 | 最终余额的地位 | **已确认**：通关是主目标；最终余额是通关后的次级分数；失败局余额只展示、不参与正式成绩比较 | 见 §5.3 |
 | D-12 | 地铁是否继续保持零风险 | **已确认并实现**：地铁每次有 5% 故障率，故障额外 15 分钟；仍免疫天气/城市事件，不与 sleepDebt 联动 | 10 万局验证见 §8.5 |
+| D-13 | 高睡债是否应反制无购物地铁路线 | **已确认并实现**：睡债 180～300 时坐过站概率由 0% 线性升至 100%，额外 20 分钟；优先于未来可能重启的故障机制 | 当前参数待重新完成正式模拟 |
 
 ### P2：可后补，不阻塞原型
 

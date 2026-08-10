@@ -141,6 +141,16 @@ function disruptionBonus(state: CommuteState, config: BalanceConfig): number {
   );
 }
 
+function subwayWorstMin(sleepDebt: number, config: BalanceConfig): number {
+  const missedStopMin = sleepDebt > config.COMMUTE_SUBWAY_MISSED_STOP_DEBT_THRESHOLD
+    ? config.COMMUTE_SUBWAY_MISSED_STOP_EXTRA_MIN
+    : 0;
+  return config.COMMUTE_SUBWAY_MIN + Math.max(
+    config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN,
+    missedStopMin,
+  );
+}
+
 function safeBedtimeReserve(state: BedtimeState, config: BalanceConfig): number {
   if (!state.isWorkDay) return 0;
 
@@ -158,7 +168,7 @@ function safeBedtimeReserve(state: BedtimeState, config: BalanceConfig): number 
   const candidates = [
     {
       cost: config.COMMUTE_SUBWAY_COST,
-      worstMin: config.COMMUTE_SUBWAY_MIN + config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN,
+      worstMin: subwayWorstMin(morningDebt, config),
     },
     {
       cost: config.COMMUTE_EXPRESS_COST,
@@ -261,7 +271,7 @@ const STRATEGIES: Record<StrategyId, StrategyDefinition> = {
         {
           choice: 'subway' as const,
           cost: config.COMMUTE_SUBWAY_COST,
-          worstMin: config.COMMUTE_SUBWAY_MIN + config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN,
+          worstMin: subwayWorstMin(state.sleepDebt, config),
         },
         {
           choice: 'express' as const,
@@ -392,7 +402,7 @@ function classifyFailure(strategyId: StrategyId, state: ResultState, reason: Los
     lastRecord?.isWorkDay
     && (
       (lastRecord.commute === '快车' && lastRecord.commuteCancelled)
-      || (lastRecord.commute === '地铁' && lastRecord.subwayFailed)
+      || (lastRecord.commute === '地铁' && (lastRecord.subwayFailed || lastRecord.subwayMissedStop))
     )
   ) {
     return 'voluntaryRiskRng';

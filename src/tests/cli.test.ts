@@ -37,7 +37,7 @@ describe('interactive CLI', () => {
     expect(result.state.dayIndex).toBe(12);
     expect(result.state.dailyLog).toHaveLength(12);
     expect(fixture.output()).toContain('通关！');
-    expect(fixture.output()).toContain('5%故障，额外15分钟');
+    expect(fixture.output()).toContain('睡债180～300时，坐过站概率由0%线性升至100%，+20分');
     expect(fixture.output()).toContain('昨晚 00:45 入睡');
     expect(fixture.output()).not.toContain('Day 13');
   });

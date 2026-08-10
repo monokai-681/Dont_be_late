@@ -7,14 +7,15 @@
  * - 原型阶段移除「开车」选项，只剩 3 档
  * - 快车取消：最多发生 0 或 1 次，**绝不会取消第二次**（重新叫的第二辆必然成功）
  * - 专车：取消率 0%（从不取消），但**不免疫**天气 / 事件加时
- * - 地铁：不受天气、事件影响；5% 信号故障会额外增加 15 分钟
+ * - 地铁：信号故障机制暂时停用（保留代码与注入配置）
+ * - 睡债 180~300 分钟时，地铁坐过站概率从 0% 线性增加到 100%
  * ---------------------------------------------------------------
  */
 
 import type { CommuteId, CommuteResult } from './types';
 import type { Rng } from './random';
 import { MAX_COMMUTE_BONUS } from './constants';
-import { assertBoolean, assertIntegerInRange, assertNever, assertOneOf } from './validation';
+import { assertBoolean, assertFiniteNonNegative, assertIntegerInRange, assertNever, assertOneOf } from './validation';
 import { DEFAULT_BALANCE_CONFIG, type BalanceConfig } from './config/balance';
 
 const COMMUTE_IDS: readonly CommuteId[] = ['subway', 'express', 'premium'];
@@ -33,6 +34,7 @@ export function calculateCommute(
   eventBonus: number,
   rng: Rng,
   config: BalanceConfig = DEFAULT_BALANCE_CONFIG,
+  sleepDebt = 0,
 ): CommuteResult {
   assertOneOf(choice, COMMUTE_IDS, 'calculateCommute:choice');
   assertBoolean(isSnow, 'calculateCommute:isSnow');
@@ -42,6 +44,7 @@ export function calculateCommute(
     config.EVENT_HOLIDAY_BONUS_MIN,
     'calculateCommute:eventBonus',
   );
+  assertFiniteNonNegative(sleepDebt, 'calculateCommute:sleepDebt');
 
   // 三档基础参数
   let baseMin: number;
@@ -84,15 +87,35 @@ export function calculateCommute(
   const cancelled = choice === 'express' && rng() < cancelRate;
   const cancelMin = cancelled ? config.COMMUTE_EXPRESS_CANCEL_EXTRA_MIN : 0;
 
-  // Step 3: 地铁故障 roll。地铁仍免疫天气/事件，但不再是零风险。
-  const subwayFailed = choice === 'subway' && rng() < config.COMMUTE_SUBWAY_FAILURE_RATE;
+  // Step 3: 地铁风险 roll。坐过站优先，保证睡债到达 cap 时必定坐过站。
+  // 故障机制默认停用；未来只需调高 rate 即可重新开启，但仍不会与坐过站同时发生。
+  const missedStopRange = config.COMMUTE_SUBWAY_MISSED_STOP_DEBT_CAP
+    - config.COMMUTE_SUBWAY_MISSED_STOP_DEBT_THRESHOLD;
+  if (!Number.isFinite(missedStopRange) || missedStopRange <= 0) {
+    throw new RangeError('calculateCommute:missed-stop debt cap must exceed threshold');
+  }
+  const missedStopRate = Math.max(0, Math.min(
+    (sleepDebt - config.COMMUTE_SUBWAY_MISSED_STOP_DEBT_THRESHOLD) / missedStopRange,
+    1,
+  ));
+  const subwayMissedStop = choice === 'subway'
+    && missedStopRate > 0
+    && rng() < missedStopRate;
+  const subwayFailed = choice === 'subway'
+    && !subwayMissedStop
+    && config.COMMUTE_SUBWAY_FAILURE_RATE > 0
+    && rng() < config.COMMUTE_SUBWAY_FAILURE_RATE;
   const subwayFailureMin = subwayFailed ? config.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN : 0;
+  const subwayMissedStopMin = subwayMissedStop
+    ? config.COMMUTE_SUBWAY_MISSED_STOP_EXTRA_MIN
+    : 0;
 
   // Step 4: 汇总
   return {
-    commuteMin: baseMin + bonusMin + cancelMin + subwayFailureMin,
+    commuteMin: baseMin + bonusMin + cancelMin + subwayFailureMin + subwayMissedStopMin,
     commuteCost: baseCost,
     cancelled,
     subwayFailed,
+    subwayMissedStop,
   };
 }

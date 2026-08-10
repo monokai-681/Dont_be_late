@@ -24,8 +24,9 @@ describe('D-8 commute balance', () => {
       commuteCost: 5,
       cancelled: false,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
-    expect(rngCalls).toBe(1);
+    expect(rngCalls).toBe(0);
   });
 
   test('rejects unsupported commute choices at runtime', () => {
@@ -40,11 +41,14 @@ describe('D-8 commute balance', () => {
     expect(() => calculateCommute('express', 'yes' as never, 0, () => 0)).toThrow(TypeError);
   });
 
-  test('the immutable default config contains the D-8 subway values', () => {
+  test('the immutable default config contains the subway risk values', () => {
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_COST).toBe(5);
-    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_FAILURE_RATE).toBe(0.05);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_FAILURE_RATE).toBe(0);
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_FAILURE_EXTRA_MIN).toBe(15);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MISSED_STOP_DEBT_THRESHOLD).toBe(180);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MISSED_STOP_DEBT_CAP).toBe(300);
+    expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MISSED_STOP_EXTRA_MIN).toBe(20);
     expect(Object.isFrozen(DEFAULT_BALANCE_CONFIG)).toBe(true);
   });
 
@@ -61,6 +65,7 @@ describe('D-8 commute balance', () => {
       commuteCost: 1,
       cancelled: false,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
     expect(DEFAULT_BALANCE_CONFIG.COMMUTE_SUBWAY_MIN).toBe(60);
   });
@@ -77,6 +82,7 @@ describe('D-8 commute balance', () => {
       commuteCost: 30,
       cancelled: true,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
     expect(rngCalls).toBe(1);
   });
@@ -87,12 +93,14 @@ describe('D-8 commute balance', () => {
       commuteCost: 30,
       cancelled: true,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
     expect(calculateCommute('express', false, 0, () => 0.3)).toEqual({
       commuteMin: 25,
       commuteCost: 30,
       cancelled: false,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
   });
 
@@ -127,34 +135,76 @@ describe('D-8 commute balance', () => {
       commuteCost: 60,
       cancelled: false,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
     expect(rngCalls).toBe(0);
   });
 
   test('subway failure threshold adds exactly fifteen minutes', () => {
-    expect(calculateCommute('subway', true, 20, () => 0.049999)).toEqual({
+    const enabledFailure = { ...DEFAULT_BALANCE_CONFIG, COMMUTE_SUBWAY_FAILURE_RATE: 0.01 };
+    expect(calculateCommute('subway', true, 20, () => 0.009999, enabledFailure)).toEqual({
       commuteMin: 75,
       commuteCost: 5,
       cancelled: false,
       subwayFailed: true,
+      subwayMissedStop: false,
     });
-    expect(calculateCommute('subway', true, 20, () => 0.05)).toEqual({
+    expect(calculateCommute('subway', true, 20, () => 0.01, enabledFailure)).toEqual({
       commuteMin: 60,
       commuteCost: 5,
       cancelled: false,
       subwayFailed: false,
+      subwayMissedStop: false,
     });
   });
 
-  test('subway failure distribution converges near five percent', () => {
+  test('subway failure distribution converges near one percent', () => {
     const samples = 100_000;
     const rng = createRng(5);
+    const enabledFailure = { ...DEFAULT_BALANCE_CONFIG, COMMUTE_SUBWAY_FAILURE_RATE: 0.01 };
     let failures = 0;
 
     for (let i = 0; i < samples; i += 1) {
-      if (calculateCommute('subway', false, 0, rng).subwayFailed) failures += 1;
+      if (calculateCommute('subway', false, 0, rng, enabledFailure).subwayFailed) failures += 1;
     }
 
-    expect(failures / samples).toBeCloseTo(0.05, 2);
+    expect(failures / samples).toBeCloseTo(0.01, 2);
+  });
+
+  test('sleep debt 240 has a 50% subway missed-stop probability', () => {
+    expect(calculateCommute('subway', false, 0, () => 0.499999, DEFAULT_BALANCE_CONFIG, 240)).toEqual({
+      commuteMin: 80,
+      commuteCost: 5,
+      cancelled: false,
+      subwayFailed: false,
+      subwayMissedStop: true,
+    });
+    expect(calculateCommute('subway', false, 0, () => 0.5, DEFAULT_BALANCE_CONFIG, 240)).toMatchObject({
+      commuteMin: 60,
+      subwayMissedStop: false,
+    });
+  });
+
+  test('the missed-stop risk is disabled through 180 debt and guaranteed at 300 debt', () => {
+    expect(calculateCommute('subway', false, 0, () => 0, DEFAULT_BALANCE_CONFIG, 180)).toMatchObject({
+      commuteMin: 60,
+      subwayFailed: false,
+      subwayMissedStop: false,
+    });
+    expect(calculateCommute('subway', false, 0, () => 0.999999, DEFAULT_BALANCE_CONFIG, 300)).toMatchObject({
+      commuteMin: 80,
+      subwayFailed: false,
+      subwayMissedStop: true,
+    });
+  });
+
+  test('missed stop takes priority over an enabled subway failure', () => {
+    const enabledFailure = { ...DEFAULT_BALANCE_CONFIG, COMMUTE_SUBWAY_FAILURE_RATE: 0.01 };
+    const result = calculateCommute('subway', false, 0, () => 0, enabledFailure, 300);
+    expect(result).toMatchObject({ commuteMin: 80, subwayFailed: false, subwayMissedStop: true });
+  });
+
+  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid sleep debt %s', sleepDebt => {
+    expect(() => calculateCommute('subway', false, 0, () => 1, DEFAULT_BALANCE_CONFIG, sleepDebt)).toThrow();
   });
 });

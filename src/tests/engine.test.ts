@@ -124,7 +124,10 @@ describe('engine reducer', () => {
 
   test('subway failure propagates through arrival state and daily log', () => {
     const rolls = [0.999999, 0]; // one snooze roll, then a subway failure roll
-    const deps: EngineDeps = { rng: () => rolls.shift() ?? 0.999999 };
+    const deps: EngineDeps = {
+      rng: () => rolls.shift() ?? 0.999999,
+      balance: { ...DEFAULT_BALANCE_CONFIG, COMMUTE_SUBWAY_FAILURE_RATE: 0.01 },
+    };
     const commute = reachCommute(startGame(deps), 420, deps);
     const office = dispatch(commute, { type: 'CHOOSE_COMMUTE', choice: 'subway' }, deps);
 
@@ -141,6 +144,23 @@ describe('engine reducer', () => {
       arriveHHMM: '08:49',
       isLate: false,
     });
+  });
+
+  test('high sleep debt subway missed stop propagates through arrival state and daily log', () => {
+    const rolls = [0.999999, 0]; // snooze, then missed-stop roll
+    const deps: EngineDeps = { rng: () => rolls.shift() ?? 0.999999 };
+    const bedtime: BedtimeState = { ...startGame(deps), sleepDebt: 300 };
+    const commute = reachCommute(bedtime, 360, deps);
+    const office = dispatch(commute, { type: 'CHOOSE_COMMUTE', choice: 'subway' }, deps);
+
+    expect(office.phase).toBe('office');
+    if (office.phase !== 'office') return;
+    expect(office.subwayMissedStop).toBe(true);
+    expect(office.subwayFailed).toBe(false);
+    expect(office.commuteMin).toBe(80);
+
+    const dayTwo = dispatch(office, { type: 'CONTINUE_TO_NEXT_DAY' }, deps);
+    expect(dayTwo.dailyLog[0]).toMatchObject({ subwayMissedStop: true });
   });
 
   test('workdays carry half the prior debt before adding the new nightly debt', () => {

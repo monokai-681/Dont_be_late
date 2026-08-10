@@ -182,6 +182,7 @@ function workDayRecord(state: WorkDayProgress): WorkDayRecord {
     record.commute = commuteName(state.commuteChoice);
     record.commuteCancelled = state.commuteCancelled;
     record.subwayFailed = state.subwayFailed;
+    record.subwayMissedStop = state.subwayMissedStop;
     record.arriveHHMM = formatClock(state.arriveMin);
     record.isLate = state.isLate;
   }
@@ -344,6 +345,7 @@ function reduceCommute(
     state.eventBonusMin,
     deps.rng,
     config,
+    state.sleepDebt,
   );
   const arriveMin = calculateArrivalMinutes(state.alarmMin, state.routineMin, commute.commuteMin);
   const balance = state.balance - commute.commuteCost;
@@ -354,6 +356,7 @@ function reduceCommute(
     commuteMin: commute.commuteMin,
     commuteCancelled: commute.cancelled,
     subwayFailed: commute.subwayFailed,
+    subwayMissedStop: commute.subwayMissedStop,
     arriveMin,
   };
 
